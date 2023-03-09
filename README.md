@@ -1,5 +1,5 @@
 # mediabot
-telegram bot for fetching yt audio &amp; editing telegram audio files
+telegram bot for fetching yt audio and editing telegram audio files
 
 
 1. local cache cleared every 24h

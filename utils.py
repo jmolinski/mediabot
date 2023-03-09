@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import random
+import string
+
 
 from typing import Any, TypeVar, cast
 
@@ -30,3 +33,25 @@ def extract_custom_reaction(t: str) -> str | None:
         return None
 
     return reaction
+
+
+def extract_youtube_id(link: str) -> str:
+    link = link.strip()
+
+    if "youtu.be" in link:
+        return link.split("/")[-1]
+
+    link = link.split("/")[-1].split("?")[-1]
+    ids = [
+        ytid
+        for (argname, ytid) in [x.split("=") for x in link.split("&")]
+        if argname == "v"
+    ]
+    assert len(ids) == 1
+    return ids[0]
+
+
+def generate_random_filename(length: int = 16) -> str:
+    return "".join(
+        random.choice(string.ascii_letters + string.digits) for _ in range(length)
+    )

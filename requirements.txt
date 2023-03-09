@@ -2,3 +2,6 @@ black==23.1.0
 mypy==1.0.1
 python-telegram-bot==20.1
 ruff==0.0.254
+yt-dlp==2023.3.4
+Pillow==9.4.0
+eyed3==0.9.7
