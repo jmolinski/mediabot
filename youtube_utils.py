@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 
 import mp3_utils
 
 from image_utils import convert_image_to_format, crop_image_to_square
 from settings import get_default_logger
-from utils import generate_random_filename
+from utils import generate_random_filename, run_command
 
 DESIRED_THUMBNAIL_FORMAT = "jpg"
 
@@ -61,7 +60,7 @@ def download_song(ytid: str) -> str:
 
     output_filepath = rf"media/{generate_random_filename()}.mp3"
 
-    ret = subprocess.call(
+    run_command(
         [
             "yt-dlp",
             "-f",
@@ -78,9 +77,8 @@ def download_song(ytid: str) -> str:
             "--write-thumbnail",
             f"https://www.youtube.com/watch?v={ytid}",
         ],
-        shell=False,
     )
-    get_default_logger().info(f"Audio from id {ytid} downloaded with return code {ret}")
+    get_default_logger().info(f"Audio from id {ytid} downloaded")
 
     assert os.path.exists(output_filepath)
 

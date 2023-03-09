@@ -3,8 +3,12 @@ from __future__ import annotations
 import random
 import re
 import string
+import subprocess
+import sys
 
 from typing import Any, TypeVar, cast
+
+from settings import get_default_logger
 
 T = TypeVar("T")
 
@@ -54,3 +58,17 @@ def generate_random_filename(length: int = 16) -> str:
     return "".join(
         random.choice(string.ascii_letters + string.digits) for _ in range(length)
     )
+
+
+def run_command(cmd: list[str], expected_code: int = 0) -> subprocess.CompletedProcess:
+    get_default_logger().debug(f"Running command: {' '.join(cmd)}")
+
+    ret = subprocess.run(cmd, shell=False, capture_output=True)
+
+    if expected_code != -1 and ret.returncode != expected_code:
+        print(ret.stdout)
+        print(ret.stderr, file=sys.stderr)
+
+        raise RuntimeError(f"Command {cmd} failed with code {ret.returncode}")
+
+    return ret

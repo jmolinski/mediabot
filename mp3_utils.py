@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import subprocess
-
 from typing import Any, cast
 
 import eyed3
 
+from utils import run_command
+
 
 def change_metadata(filename: str, field_name: str, data: str) -> None:
-    ret = subprocess.call(
+    run_command(
         [
             "ffmpeg",
             "-i",
@@ -19,21 +19,15 @@ def change_metadata(filename: str, field_name: str, data: str) -> None:
             "copy",
             "temp.mp3",
         ],
-        shell=False,
     )
-    assert ret == 0
 
-    ret = subprocess.call(
-        ["mv", "temp.mp3", filename],
-        shell=False,
-    )
-    assert ret == 0
+    run_command(["mv", "temp.mp3", filename])
 
 
 def set_cover(filepath: str, cover_filepath: str) -> None:
     # source: https://stackoverflow.com/a/18718265
 
-    ret = subprocess.call(
+    run_command(
         [
             "ffmpeg",
             "-i",
@@ -54,15 +48,9 @@ def set_cover(filepath: str, cover_filepath: str) -> None:
             "comment=Cover (front)",
             "temp.mp3",
         ],
-        shell=False,
     )
-    assert ret == 0
 
-    ret = subprocess.call(
-        ["mv", "temp.mp3", filepath],
-        shell=False,
-    )
-    assert ret == 0
+    run_command(["mv", "temp.mp3", filepath])
 
 
 def read_cover_image(filepath: str) -> bytes | None:
