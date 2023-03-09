@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import re
 import random
+import re
 import string
-
 
 from typing import Any, TypeVar, cast
 

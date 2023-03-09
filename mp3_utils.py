@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import subprocess
 
+from typing import Any, cast
+
 import eyed3
-from typing import cast
 
 
 def change_metadata(filename: str, field_name: str, data: str) -> None:
@@ -11,9 +12,9 @@ def change_metadata(filename: str, field_name: str, data: str) -> None:
         [
             "ffmpeg",
             "-i",
-            rf"media/{filename}.mp3",
+            filename,
             "-metadata",
-            f"{field_name}={data}",
+            rf"{field_name}={data}",
             "-codec",
             "copy",
             "temp.mp3",
@@ -23,7 +24,7 @@ def change_metadata(filename: str, field_name: str, data: str) -> None:
     assert ret == 0
 
     ret = subprocess.call(
-        ["mv", "temp.mp3", rf"media/{filename}.mp3"],
+        ["mv", "temp.mp3", filename],
         shell=False,
     )
     assert ret == 0
@@ -77,3 +78,17 @@ def read_cover_image(filepath: str) -> bytes | None:
         return cast(bytes, images[0].image_data)
     else:
         return None
+
+
+def read_metadata(filepath: str) -> dict[str, Any]:
+    audio_file = eyed3.load(filepath)
+
+    metadata = {}
+    if audio_file.tag.title:
+        metadata["title"] = audio_file.tag.title
+    if audio_file.tag.album:
+        metadata["album"] = audio_file.tag.album
+    if audio_file.tag.artist:
+        metadata["performer"] = audio_file.tag.artist
+
+    return metadata

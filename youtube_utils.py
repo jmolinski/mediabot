@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 
@@ -12,6 +13,17 @@ from utils import generate_random_filename
 DESIRED_THUMBNAIL_FORMAT = "jpg"
 
 
+def set_metadata_from_info_file(mp3_filepath: str) -> None:
+    info_json_filepath = mp3_filepath + ".info.json"
+
+    with open(info_json_filepath, "rb") as f:
+        title = json.load(f)["title"]
+
+    mp3_utils.change_metadata(mp3_filepath, "title", title)
+
+    os.remove(info_json_filepath)
+
+
 def merge_mp3_with_cover(mp3_filepath: str) -> None:
     mp3_basename = os.path.basename(mp3_filepath)
     mp3_dirname = os.path.dirname(mp3_filepath)
@@ -19,7 +31,9 @@ def merge_mp3_with_cover(mp3_filepath: str) -> None:
     thumbnails = [
         f"{mp3_dirname}/{p}"
         for p in os.listdir(os.path.dirname(mp3_filepath))
-        if mp3_basename in p and not p.endswith(".mp3")
+        if p.startswith(mp3_basename)
+        and not p.endswith(".mp3")
+        and not p.endswith(".info.json")
     ]
     assert len(thumbnails) > 0
 
@@ -54,6 +68,7 @@ def download_song(ytid: str) -> str:
             "bestaudio/best",
             "--extract-audio",
             "--write-thumbnail",
+            "--write-info-json",
             "--audio-format",
             "mp3",
             "--audio-quality",
@@ -70,5 +85,6 @@ def download_song(ytid: str) -> str:
     assert os.path.exists(output_filepath)
 
     merge_mp3_with_cover(output_filepath)
+    set_metadata_from_info_file(output_filepath)
 
     return output_filepath

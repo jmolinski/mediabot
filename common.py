@@ -69,16 +69,23 @@ async def send_reply_audio(
 ) -> MsgWrapper:
     assert update.message is not None
 
+    metadata = mp3_utils.read_metadata(audio)
+
+    if "title" in metadata:
+        metadata["filename"] = metadata["title"]
+
     if thumbnail is None:
         thumbnail = mp3_utils.read_cover_image(audio)
-
     if thumbnail:
-        kwargs["thumb"] = thumbnail
+        metadata["thumb"] = thumbnail
 
     return MsgWrapper(
         await update.message.reply_audio(
             audio=audio,
+            **metadata,
             write_timeout=60,
+            read_timeout=60,
+            pool_timeout=60,
             **kwargs,
         )
     )
