@@ -2,7 +2,7 @@ from typing import Any
 
 from telegram.ext import Application, MessageHandler, filters
 
-from handlers import handler_message
+from handlers import handler_message, handler_picture
 from settings import disable_logger, get_settings
 
 COMMANDS: list[Any] = []  # probably won't be used
@@ -26,6 +26,9 @@ def main() -> None:
 
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handler_message)
+    )
+    application.add_handler(
+        MessageHandler(filters.PHOTO, handler_picture),
     )
 
     disable_logger("hpack.hpack")

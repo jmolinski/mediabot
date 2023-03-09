@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from telegram import Audio
+from telegram import Audio, File
 from telegram import Message as TelegramMessage
 
 from utils import get_name_from_author_obj
@@ -65,6 +65,15 @@ class MsgWrapper:
     def audio(self) -> Audio:
         assert self.has_audio
         return cast(Audio, self.msg.audio)
+
+    @property
+    def has_picture(self) -> bool:
+        return self.msg.photo is not None
+
+    @property
+    async def picture(self) -> File:
+        assert self.has_picture
+        return await self.msg.photo[-1].get_file()
 
     def extract_youtube_links(self) -> list[str]:
         return [
