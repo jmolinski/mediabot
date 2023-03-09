@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import os
+
 from typing import Any, cast
 
 import eyed3
 
-from utils import run_command
+from utils import generate_random_filename, run_command, timestamp_to_seconds
 
 
 def change_metadata(filename: str, field_name: str, data: str) -> None:
+    temp_filename = generate_random_filename() + ".mp3"
+
     run_command(
         [
             "ffmpeg",
@@ -17,15 +21,17 @@ def change_metadata(filename: str, field_name: str, data: str) -> None:
             rf"{field_name}={data}",
             "-codec",
             "copy",
-            "temp.mp3",
+            temp_filename,
         ],
     )
 
-    run_command(["mv", "temp.mp3", filename])
+    run_command(["mv", temp_filename, filename])
 
 
 def set_cover(filepath: str, cover_filepath: str) -> None:
     # source: https://stackoverflow.com/a/18718265
+
+    temp_filename = generate_random_filename() + ".mp3"
 
     run_command(
         [
@@ -46,11 +52,11 @@ def set_cover(filepath: str, cover_filepath: str) -> None:
             # "title=Album cover",
             "-metadata:s:v",
             "comment=Cover (front)",
-            "temp.mp3",
+            temp_filename,
         ],
     )
 
-    run_command(["mv", "temp.mp3", filepath])
+    run_command(["mv", temp_filename, filepath])
 
 
 def read_cover_image(filepath: str) -> bytes | None:
@@ -68,6 +74,19 @@ def read_cover_image(filepath: str) -> bytes | None:
         return None
 
 
+def copy_cover_image(src: str, dest: str) -> None:
+    image = read_cover_image(src)
+    if not image:
+        return
+
+    temp_cover_filename = generate_random_filename() + ".jpg"
+    with open(temp_cover_filename, "wb") as f:
+        f.write(image)
+
+    set_cover(dest, temp_cover_filename)
+    os.remove(temp_cover_filename)
+
+
 def read_metadata(filepath: str) -> dict[str, Any]:
     audio_file = eyed3.load(filepath)
 
@@ -80,3 +99,30 @@ def read_metadata(filepath: str) -> dict[str, Any]:
         metadata["performer"] = audio_file.tag.artist
 
     return metadata
+
+
+def cut_audio(filepath: str, start: str, end: str) -> None:
+    start_s = timestamp_to_seconds(start)
+    end_s = timestamp_to_seconds(end)
+    duration_s = end_s - start_s
+
+    temp_filename = generate_random_filename() + ".mp3"
+
+    run_command(
+        [
+            "ffmpeg",
+            "-ss",
+            str(start_s),
+            "-t",
+            str(duration_s),
+            "-i",
+            filepath,
+            "-acodec",
+            "copy",
+            temp_filename,
+        ],
+    )
+
+    copy_cover_image(filepath, temp_filename)
+
+    run_command(["mv", temp_filename, filepath])

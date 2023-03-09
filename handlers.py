@@ -85,7 +85,8 @@ def apply_transformer(filepath: str, name: str, args: list[str]) -> None:
     if name in ("title", "artist", "album"):
         mp3_utils.change_metadata(filepath, name, " ".join(args))
     elif name == "cut":
-        print(name, args)
+        assert len(args) == 2
+        mp3_utils.cut_audio(filepath, *args)
     else:
         raise Exception("Unknown transformer name: " + name)
 

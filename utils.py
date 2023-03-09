@@ -72,3 +72,15 @@ def run_command(cmd: list[str], expected_code: int = 0) -> subprocess.CompletedP
         raise RuntimeError(f"Command {cmd} failed with code {ret.returncode}")
 
     return ret
+
+
+def timestamp_to_seconds(timestamp: str) -> int:
+    parts = [int(x.lstrip("0") or 0) for x in timestamp.split(":")]
+    assert len(parts) in (2, 3)
+    parts = parts[::-1]
+
+    seconds = 0
+    for i, x in enumerate(parts):
+        seconds += x * 60**i
+
+    return seconds
