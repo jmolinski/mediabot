@@ -1,8 +1,11 @@
+from typing import Any
+
 from telegram.ext import Application, MessageHandler, filters
 
-from settings import get_settings
+from handlers import handler_message
+from settings import disable_logger, get_settings
 
-COMMANDS = []  # probably won't be used
+COMMANDS: list[Any] = []  # probably won't be used
 
 
 async def post_init_set_bot_commands(application: Application) -> None:
@@ -24,6 +27,11 @@ def main() -> None:
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handler_message)
     )
+
+    disable_logger("hpack.hpack")
+    disable_logger("httpx._client")
+    disable_logger("PIL.Image")
+    disable_logger("eyed3")
 
     application.run_polling()
 
