@@ -100,6 +100,8 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
     get_default_logger().info("Message received")
 
     msg = MsgWrapper(update.message)
+    if not msg.is_authorized():
+        return
 
     files_to_edit = await fetch_targets(context, msg)
 
@@ -115,6 +117,9 @@ async def handler_picture(update: Update, context: CallbackContext) -> None:
     get_default_logger().info("Picture received")
 
     msg = MsgWrapper(update.message)
+    if not msg.is_authorized():
+        return
+
     if not msg.has_parent:
         return
 

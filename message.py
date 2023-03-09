@@ -5,6 +5,7 @@ from typing import cast
 from telegram import Audio, File
 from telegram import Message as TelegramMessage
 
+from settings import get_settings
 from utils import get_name_from_author_obj
 
 
@@ -81,3 +82,11 @@ class MsgWrapper:
             for p in self.text.split()
             if "https" in p and ("youtube.com" in p or "youtu.be" in p)
         ]
+
+    def is_authorized(self) -> bool:
+        settings = get_settings()
+
+        return (
+            self.author_id in settings.authorized_users
+            or self.chat_id in settings.authorized_chats
+        )
