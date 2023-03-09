@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from collections import namedtuple
+
 from telegram import Audio, Bot, Update
 from telegram.ext import CallbackContext
 
@@ -11,6 +13,8 @@ from common import send_reply_audio
 from message import MsgWrapper
 from settings import get_default_logger
 from utils import extract_youtube_id
+
+AudioFile = namedtuple("AudioFile", "path is_temporary")
 
 
 async def download_audio_file(bot: Bot, audio: Audio) -> None:
@@ -28,19 +32,37 @@ async def download_audio_file_if_not_in_cache(bot: Bot, audio: Audio) -> None:
         await download_audio_file(bot, audio)
 
 
-async def handle_download_from_youtube(
-    update: Update, context: CallbackContext, links: list[str]
+async def post_audio_to_telegram(
+    update: Update,
+    context: CallbackContext,
+    filepath: str,
 ) -> None:
-    for link in links:
-        yt_id = extract_youtube_id(link)
-        filepath = youtube_utils.download_song(yt_id)
+    ret = await send_reply_audio(update, filepath)
+    await download_audio_file_if_not_in_cache(context.bot, ret.audio)
 
-        assert update.message is not None
-        ret = await send_reply_audio(update, filepath)
-        # TODO run metadata updaters before posting (if present in original msg)
-        await download_audio_file_if_not_in_cache(context.bot, ret.audio)
 
-        os.remove(filepath)
+async def download_files_from_youtube(links: list[str]) -> list[str]:
+    return [youtube_utils.download_song(extract_youtube_id(link)) for link in links]
+
+
+async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[AudioFile]:
+    targets: list[AudioFile] = []
+
+    if msg.has_audio:
+        await download_audio_file_if_not_in_cache(context.bot, msg.audio)
+        targets.append(
+            AudioFile(f"media/{msg.audio.file_unique_id}.mp3", is_temporary=False)
+        )
+
+    if msg.has_parent:
+        return targets
+
+    targets += [
+        AudioFile(filepath, is_temporary=True)
+        for filepath in await download_files_from_youtube(msg.extract_youtube_links())
+    ]
+
+    return targets
 
 
 async def handler_message(update: Update, context: CallbackContext) -> None:
@@ -48,14 +70,13 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
 
     msg = MsgWrapper(update.message)
 
-    if not msg.has_parent:
-        if yt_links := msg.extract_youtube_links():
-            await handle_download_from_youtube(update, context, yt_links)
-        return
+    files_to_edit = await fetch_targets(context, msg)
 
-    print("\n\n\n")
-    print(msg.parent_msg.audio)
-    print("\n\n\n")
+    for target in files_to_edit:
+        # TODO run metadata updaters before posting (if present in original msg)
+        await post_audio_to_telegram(update, context, target.path)
+        if target.is_temporary:
+            os.remove(target.path)
 
     if msg.text.startswith("title"):
         pass
