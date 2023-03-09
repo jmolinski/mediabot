@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import os
-
-from collections import namedtuple
+import shutil
 
 from telegram import Audio, Bot, Update
 from telegram.ext import CallbackContext
@@ -19,8 +18,6 @@ from image_utils import (
 from message import MsgWrapper
 from settings import get_default_logger
 from utils import extract_youtube_id, generate_random_filename
-
-AudioFile = namedtuple("AudioFile", "path is_temporary")
 
 
 async def download_audio_file(bot: Bot, audio: Audio) -> None:
@@ -51,18 +48,51 @@ async def download_files_from_youtube(links: list[str]) -> list[str]:
     return [youtube_utils.download_song(extract_youtube_id(link)) for link in links]
 
 
-async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[AudioFile]:
+async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[str]:
     if msg.has_parent:
-        if msg.parent_msg.has_audio:
-            audio = msg.parent_msg.audio
-            await download_audio_file_if_not_in_cache(context.bot, audio)
-            return [AudioFile(f"media/{audio.file_unique_id}.mp3", is_temporary=False)]
-        return []
+        if not msg.parent_msg.has_audio:
+            return []
 
-    return [
-        AudioFile(filepath, is_temporary=True)
-        for filepath in await download_files_from_youtube(msg.extract_youtube_links())
+        audio = msg.parent_msg.audio
+        await download_audio_file_if_not_in_cache(context.bot, audio)
+        original_filepath = f"media/{audio.file_unique_id}.mp3"
+        copy_filepath = original_filepath.replace(
+            audio.file_unique_id, generate_random_filename()
+        )
+        shutil.copyfile(original_filepath, copy_filepath)
+        return [copy_filepath]
+
+    return await download_files_from_youtube(msg.extract_youtube_links())
+
+
+def find_transformers(msg: MsgWrapper) -> list[list[str]]:
+    nonempty_lines = [
+        line.strip().split(" ") for line in msg.text.split("\n") if line.strip()
     ]
+    transformers = [
+        line
+        for line in nonempty_lines
+        if line[0] in ("title", "artist", "album", "cut")
+    ]
+    for t in transformers:
+        assert len(t) > 1
+
+    assert len(transformers) == len(set(t[0] for t in transformers))
+    return transformers
+
+
+def apply_transformer(filepath: str, name: str, args: list[str]) -> None:
+    if name in ("title", "artist", "album"):
+        mp3_utils.change_metadata(filepath, name, " ".join(args))
+    elif name == "cut":
+        print(name, args)
+    else:
+        raise Exception("Unknown transformer name: " + name)
+
+
+def apply_transformers(filepath: str, transformers: list[list[str]]) -> None:
+    for name, *args in transformers:
+        apply_transformer(filepath, name, args)
 
 
 async def handler_message(update: Update, context: CallbackContext) -> None:
@@ -72,14 +102,12 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
 
     files_to_edit = await fetch_targets(context, msg)
 
-    for target in files_to_edit:
-        # TODO run metadata updaters before posting (if present in original msg)
-        await post_audio_to_telegram(update, context, target.path)
-        if target.is_temporary:
-            os.remove(target.path)
+    transformers = find_transformers(msg)
 
-    if msg.text.startswith("title"):
-        pass
+    for target in files_to_edit:
+        apply_transformers(target, transformers)
+        await post_audio_to_telegram(update, context, target)
+        os.remove(target)
 
 
 async def handler_picture(update: Update, context: CallbackContext) -> None:
@@ -102,8 +130,8 @@ async def handler_picture(update: Update, context: CallbackContext) -> None:
     os.remove(picture_filename)
 
     crop_image_to_square(thumbnail)
-    mp3_utils.set_cover(target.path, thumbnail)
+    mp3_utils.set_cover(target, thumbnail)
 
-    await post_audio_to_telegram(update, context, target.path)
+    await post_audio_to_telegram(update, context, target)
 
     os.remove(thumbnail)

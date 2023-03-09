@@ -79,6 +79,12 @@ async def send_reply_audio(
     if thumbnail:
         metadata["thumb"] = thumbnail
 
+    metadata = {
+        k: v
+        for k, v in metadata.items()
+        if k in ("title", "performer", "thumb", "filename")
+    }
+
     return MsgWrapper(
         await update.message.reply_audio(
             audio=audio,
