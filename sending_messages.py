@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from typing import Any
 
 from telegram import Bot, InlineKeyboardMarkup, Update
@@ -10,6 +12,9 @@ import mp3_utils
 from message import MsgWrapper
 
 EMPTY_MSG = "\xad\xad"
+
+
+TELEGRAM_BOT_MAX_FILE_SIZE = 50_000_000  # 50 MB
 
 
 async def send_message(
@@ -69,6 +74,13 @@ async def send_reply_audio(
 ) -> MsgWrapper:
     assert update.message is not None
 
+    filesize = os.path.getsize(audio)
+    if filesize > TELEGRAM_BOT_MAX_FILE_SIZE:
+        raise ValueError(
+            f"Audio file size {audio} exceeds Telegram's limit "
+            "of 50 MB (has {filesize/1_000_000} mb)"
+        )
+
     metadata = mp3_utils.read_metadata(audio)
 
     if "title" in metadata:
@@ -82,7 +94,7 @@ async def send_reply_audio(
     metadata = {
         k: v
         for k, v in metadata.items()
-        if k in ("title", "performer", "thumb", "filename")
+        if k in ("title", "performer", "thumb", "filename", "duration")
     }
 
     return MsgWrapper(
@@ -92,6 +104,7 @@ async def send_reply_audio(
             write_timeout=60,
             read_timeout=60,
             pool_timeout=60,
+            connect_timeout=60,
             **kwargs,
         )
     )

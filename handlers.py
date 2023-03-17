@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import traceback
 
 from telegram import Audio, Bot, Update
 from telegram.ext import CallbackContext
@@ -9,13 +10,13 @@ from telegram.ext import CallbackContext
 import mp3_utils
 import youtube_utils
 
-from common import send_reply_audio
 from image_utils import (
     DESIRED_THUMBNAIL_FORMAT,
     convert_image_to_format,
     crop_image_to_square,
 )
 from message import MsgWrapper
+from sending_messages import send_reply, send_reply_audio
 from settings import get_default_logger
 from utils import extract_youtube_id, generate_random_filename
 
@@ -141,3 +142,26 @@ async def handler_picture(update: Update, context: CallbackContext) -> None:
     await post_audio_to_telegram(update, context, target)
 
     os.remove(thumbnail)
+
+
+async def log_error_and_send_info_to_parent(
+    update: object, context: CallbackContext
+) -> None:
+    if not isinstance(update, Update):
+        get_default_logger().error(
+            f"Unknown event {update} caused error", exc_info=context.error
+        )
+        return
+
+    get_default_logger().error(f"Update {update} caused error", exc_info=context.error)
+
+    if not update.message:
+        return
+
+    try:
+        ex = context.error
+        assert isinstance(ex, Exception)
+        str_exp = "".join(traceback.format_exception(context.error))
+        await send_reply(update, context, f"```{str_exp}```", parse_mode="MarkdownV2")
+    except Exception as e:
+        get_default_logger().error("Error while sending error message: ", exc_info=e)
