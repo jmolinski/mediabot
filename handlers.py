@@ -45,8 +45,23 @@ async def post_audio_to_telegram(
     await download_audio_file_if_not_in_cache(context.bot, ret.audio)
 
 
-async def download_files_from_youtube(links: list[str]) -> list[str]:
-    return [youtube_utils.download_song(extract_youtube_id(link)) for link in links]
+async def download_files_from_youtube_if_not_in_cache(links: list[str]) -> list[str]:
+    targets = []
+
+    for link in links:
+        yt_id = extract_youtube_id(link)
+
+        original_filepath = f"media/{yt_id}.mp3"
+        if not os.path.exists(original_filepath):
+            youtube_utils.download_song(yt_id)
+        assert os.path.exists(original_filepath)
+
+        copy_filepath = original_filepath.replace(yt_id, generate_random_filename())
+        shutil.copyfile(original_filepath, copy_filepath)
+
+        targets.append(copy_filepath)
+
+    return targets
 
 
 async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[str]:
@@ -63,7 +78,9 @@ async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[str]:
         shutil.copyfile(original_filepath, copy_filepath)
         return [copy_filepath]
 
-    return await download_files_from_youtube(msg.extract_youtube_links())
+    return await download_files_from_youtube_if_not_in_cache(
+        msg.extract_youtube_links()
+    )
 
 
 def find_transformers(msg: MsgWrapper) -> list[list[str]]:

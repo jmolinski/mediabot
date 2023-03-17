@@ -7,7 +7,7 @@ import mp3_utils
 
 from image_utils import convert_image_to_format, crop_image_to_square
 from settings import get_default_logger
-from utils import generate_random_filename, run_command
+from utils import run_command
 
 DESIRED_THUMBNAIL_FORMAT = "jpg"
 
@@ -58,7 +58,7 @@ def merge_mp3_with_cover(mp3_filepath: str) -> None:
 def download_song(ytid: str) -> str:
     get_default_logger().info(f"Downloading youtube audio from id: {ytid}")
 
-    output_filepath = rf"media/{generate_random_filename()}.mp3"
+    output_filepath = rf"media/{ytid}.mp3"
 
     run_command(
         [

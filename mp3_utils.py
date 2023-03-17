@@ -48,8 +48,8 @@ def set_cover(filepath: str, cover_filepath: str) -> None:
             "copy",
             "-id3v2_version",
             "3",
-            # "-metadata:s:v",
-            # "title=Album cover",
+            "-metadata:s:v",
+            "title=Album cover",
             "-metadata:s:v",
             "comment=Cover (front)",
             temp_filename,
@@ -90,7 +90,9 @@ def copy_cover_image(src: str, dest: str) -> None:
 def read_metadata(filepath: str) -> dict[str, Any]:
     audio_file = eyed3.load(filepath)
 
-    metadata = {}
+    metadata = {
+        "duration": audio_file.info.time_secs,
+    }
     if audio_file.tag.title:
         metadata["title"] = audio_file.tag.title
     if audio_file.tag.album:

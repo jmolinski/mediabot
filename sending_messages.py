@@ -78,7 +78,7 @@ async def send_reply_audio(
     if filesize > TELEGRAM_BOT_MAX_FILE_SIZE:
         raise ValueError(
             f"Audio file size {audio} exceeds Telegram's limit "
-            "of 50 MB (has {filesize/1_000_000} mb)"
+            f"of 50 MB (has {filesize/1_000_000} mb)"
         )
 
     metadata = mp3_utils.read_metadata(audio)
