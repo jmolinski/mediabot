@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import os
 import shutil
 import traceback
@@ -19,6 +20,10 @@ from message import MsgWrapper
 from sending_messages import send_reply, send_reply_audio
 from settings import get_default_logger
 from utils import extract_youtube_id, generate_random_filename
+
+METADATA_TRANSFORMERS = ("title", "artist", "album")
+LENGTH_TRANSFORMERS = ("cut", "cuthead")
+TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
 
 
 async def download_audio_file(bot: Bot, audio: Audio) -> None:
@@ -87,31 +92,43 @@ def find_transformers(msg: MsgWrapper) -> list[list[str]]:
     nonempty_lines = [
         line.strip().split(" ") for line in msg.text.split("\n") if line.strip()
     ]
-    transformers = [
-        line
-        for line in nonempty_lines
-        if line[0] in ("title", "artist", "album", "cut")
-    ]
-    for t in transformers:
-        assert len(t) > 1
+    transformers = [line for line in nonempty_lines if line[0] in TRANSFORMERS]
 
     assert len(transformers) == len(set(t[0] for t in transformers))
     return transformers
 
 
-def apply_transformer(filepath: str, name: str, args: list[str]) -> None:
-    if name in ("title", "artist", "album"):
+def apply_transformer(filepath: str, name: str, args: list[str]) -> list[str]:
+    if name in METADATA_TRANSFORMERS:
         mp3_utils.change_metadata(filepath, name, " ".join(args))
+        return [filepath]
     elif name == "cut":
-        assert len(args) == 2
-        mp3_utils.cut_audio(filepath, *args)
+        start, end = args
+        mp3_utils.cut_audio(filepath, start, end)
+        return [filepath]
+    elif name == "cuthead":
+        assert len(args) <= 1, "Too many arguments for cuthead (expected 0 or 1)"
+        seconds = int(args[0]) if args else 5
+        filepaths: list[str] = []
+        for i in range(1, seconds + 1):
+            filepaths.append(
+                mp3_utils.cut_audio(filepath, start=i, end=0, overwrite=False)
+            )
+        os.remove(filepath)
+        return filepaths
     else:
         raise Exception("Unknown transformer name: " + name)
 
 
-def apply_transformers(filepath: str, transformers: list[list[str]]) -> None:
+def apply_transformers(filepath: str, transformers: list[list[str]]) -> list[str]:
+    filepaths = [filepath]
     for name, *args in transformers:
-        apply_transformer(filepath, name, args)
+        filepaths = list(
+            itertools.chain.from_iterable(
+                apply_transformer(filepath, name, args) for filepath in filepaths
+            )
+        )
+    return filepaths
 
 
 async def handler_message(update: Update, context: CallbackContext) -> None:
@@ -126,9 +143,11 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
     transformers = find_transformers(msg)
 
     for target in files_to_edit:
-        apply_transformers(target, transformers)
-        await post_audio_to_telegram(update, context, target)
-        os.remove(target)
+        transformed_target = apply_transformers(target, transformers)
+
+        for f in transformed_target:
+            await post_audio_to_telegram(update, context, f)
+            os.remove(f)
 
 
 async def handler_picture(update: Update, context: CallbackContext) -> None:

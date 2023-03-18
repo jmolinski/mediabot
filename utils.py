@@ -76,7 +76,7 @@ def run_command(cmd: list[str], expected_code: int = 0) -> subprocess.CompletedP
 
 def timestamp_to_seconds(timestamp: str) -> int:
     parts = [int(x.lstrip("0") or 0) for x in timestamp.split(":")]
-    assert len(parts) in (2, 3)
+    assert len(parts) in (1, 2, 3)
     parts = parts[::-1]
 
     seconds = 0

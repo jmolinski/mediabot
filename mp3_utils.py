@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 
 from typing import Any, cast
@@ -103,9 +104,16 @@ def read_metadata(filepath: str) -> dict[str, Any]:
     return metadata
 
 
-def cut_audio(filepath: str, start: str, end: str) -> None:
-    start_s = timestamp_to_seconds(start)
-    end_s = timestamp_to_seconds(end)
+def cut_audio(
+    filepath: str, start: str | int, end: str | int, overwrite: bool = True
+) -> str:
+    if start == "0":
+        start = 0
+    if str(end).startswith("-") or end in ("0", 0):
+        end = math.ceil(read_metadata(filepath)["duration"]) + int(end)
+
+    start_s = start if isinstance(start, int) else timestamp_to_seconds(start)
+    end_s = end if isinstance(end, int) else timestamp_to_seconds(end)
     duration_s = end_s - start_s
 
     temp_filename = generate_random_filename() + ".mp3"
@@ -127,4 +135,8 @@ def cut_audio(filepath: str, start: str, end: str) -> None:
 
     copy_cover_image(filepath, temp_filename)
 
-    run_command(["mv", temp_filename, filepath])
+    if overwrite:
+        run_command(["mv", temp_filename, filepath])
+        return filepath
+    else:
+        return temp_filename
