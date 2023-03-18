@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 import os
 import shutil
+import time
 import traceback
 
 from telegram import Audio, Bot, Update
@@ -24,6 +25,8 @@ from utils import extract_youtube_id, generate_random_filename
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
 TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
+
+MAX_CACHE_FILE_AGE_S = 12 * 60 * 60  # 12 hours
 
 
 async def download_audio_file(bot: Bot, audio: Audio) -> None:
@@ -137,6 +140,7 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
     msg = MsgWrapper(update.message)
     if not msg.is_authorized():
         return
+    cleanup_cache()
 
     files_to_edit = await fetch_targets(context, msg)
 
@@ -156,6 +160,7 @@ async def handler_picture(update: Update, context: CallbackContext) -> None:
     msg = MsgWrapper(update.message)
     if not msg.is_authorized():
         return
+    cleanup_cache()
 
     if not msg.has_parent:
         return
@@ -201,3 +206,14 @@ async def log_error_and_send_info_to_parent(
         await send_reply(update, context, f"```{str_exp}```", parse_mode="MarkdownV2")
     except Exception as e:
         get_default_logger().error("Error while sending error message: ", exc_info=e)
+
+
+def cleanup_cache() -> None:
+    mp3_files = [
+        os.path.join("media", f) for f in os.listdir("media") if f.endswith(".mp3")
+    ]
+    cutoff_time = time.time() - MAX_CACHE_FILE_AGE_S
+
+    for filename in mp3_files:
+        if os.stat(filename).st_mtime < cutoff_time:
+            os.remove(filename)
