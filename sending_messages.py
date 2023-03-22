@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from pathlib import Path
 from typing import Any
 
 from telegram import Bot, InlineKeyboardMarkup, Update
@@ -10,11 +11,30 @@ from telegram.ext import CallbackContext
 import mp3_utils
 
 from message import MsgWrapper
+from settings import get_settings
 
 EMPTY_MSG = "\xad\xad"
 
 
 TELEGRAM_BOT_MAX_FILE_SIZE = 50_000_000  # 50 MB
+
+
+async def download_file_from_telegram_if_not_in_cache(
+    bot: Bot, file_id: str, file_unique_id: str, ext: str
+) -> Path:
+    assert not ext.startswith(".")
+    path = get_settings().cache_dir / f"{file_unique_id}.{ext}"
+    if not path.exists():
+        path.write_bytes(await download_file_from_telegram(bot, file_id))
+    return path
+
+
+async def download_file_from_telegram(bot: Bot, file_id: str) -> bytes:
+    file_data = await bot.get_file(file_id)
+
+    buffer = bytearray()
+    await file_data.download_as_bytearray(buffer)
+    return bytes(buffer)
 
 
 async def send_message(
@@ -68,7 +88,7 @@ async def send_reply(
 
 async def send_reply_audio(
     update: Update,
-    audio: str,
+    audio: Path,
     thumbnail: str | bytes | None = None,
     **kwargs: Any,
 ) -> MsgWrapper:

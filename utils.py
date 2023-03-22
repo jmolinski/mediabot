@@ -6,6 +6,7 @@ import string
 import subprocess
 import sys
 
+from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from settings import get_default_logger
@@ -54,10 +55,20 @@ def extract_youtube_id(link: str) -> str:
     return ids[0]
 
 
-def generate_random_filename(length: int = 16) -> str:
-    return "".join(
-        random.choice(string.ascii_letters + string.digits) for _ in range(length)
-    )
+def generate_random_filename_in_cache(ext: str = "", length: int = 20) -> Path:
+    if ext and not ext.startswith("."):
+        ext = "." + ext
+
+    import settings
+
+    while True:
+        fname = "".join(
+            random.choice(string.ascii_letters + string.digits) for _ in range(length)
+        )
+
+        filename = settings.get_settings().cache_dir / (fname + ext)
+        if not filename.exists():
+            return filename
 
 
 def run_command(cmd: list[str], expected_code: int = 0) -> subprocess.CompletedProcess:

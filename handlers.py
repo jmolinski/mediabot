@@ -6,6 +6,8 @@ import shutil
 import time
 import traceback
 
+from pathlib import Path
+
 from telegram import Audio, Bot, Update
 from telegram.ext import CallbackContext
 
@@ -18,53 +20,48 @@ from image_utils import (
     crop_image_to_square,
 )
 from message import MsgWrapper
-from sending_messages import send_reply, send_reply_audio
-from settings import get_default_logger
-from utils import extract_youtube_id, generate_random_filename
+from sending_messages import (
+    download_file_from_telegram_if_not_in_cache,
+    send_reply,
+    send_reply_audio,
+)
+from settings import get_default_logger, get_settings
+from utils import extract_youtube_id, generate_random_filename_in_cache
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
 TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
 
-MAX_CACHE_FILE_AGE_S = 12 * 60 * 60  # 12 hours
 
-
-async def download_audio_file(bot: Bot, audio: Audio) -> None:
-    file_data = await bot.get_file(audio.file_id)
-
-    b = bytearray()
-    await file_data.download_as_bytearray(b)
-
-    with open(f"media/{audio.file_unique_id}.mp3", "wb") as f:
-        f.write(b)
-
-
-async def download_audio_file_if_not_in_cache(bot: Bot, audio: Audio) -> None:
-    if not os.path.exists(f"media/{audio.file_unique_id}.mp3"):
-        await download_audio_file(bot, audio)
+async def download_audio_file_from_telegram_if_not_in_cache(
+    bot: Bot, audio: Audio
+) -> Path:
+    return await download_file_from_telegram_if_not_in_cache(
+        bot, audio.file_id, audio.file_unique_id, "mp3"
+    )
 
 
 async def post_audio_to_telegram(
-    update: Update,
-    context: CallbackContext,
-    filepath: str,
-) -> None:
-    ret = await send_reply_audio(update, filepath)
-    await download_audio_file_if_not_in_cache(context.bot, ret.audio)
+    update: Update, context: CallbackContext, audio_filepath: Path
+) -> Path:
+    ret = await send_reply_audio(update, audio_filepath)
+    return await download_audio_file_from_telegram_if_not_in_cache(
+        context.bot, ret.audio
+    )
 
 
-async def download_files_from_youtube_if_not_in_cache(links: list[str]) -> list[str]:
+async def download_files_from_youtube_if_not_in_cache(links: list[str]) -> list[Path]:
     targets = []
 
     for link in links:
         yt_id = extract_youtube_id(link)
 
-        original_filepath = f"media/{yt_id}.mp3"
-        if not os.path.exists(original_filepath):
+        original_filepath = get_settings().cache_dir / f"{yt_id}.mp3"
+        if not original_filepath.exists():
             youtube_utils.download_song(yt_id)
-        assert os.path.exists(original_filepath)
+        assert original_filepath.exists()
 
-        copy_filepath = original_filepath.replace(yt_id, generate_random_filename())
+        copy_filepath = generate_random_filename_in_cache(".mp3")
         shutil.copyfile(original_filepath, copy_filepath)
 
         targets.append(copy_filepath)
@@ -72,17 +69,15 @@ async def download_files_from_youtube_if_not_in_cache(links: list[str]) -> list[
     return targets
 
 
-async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[str]:
+async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[Path]:
     if msg.has_parent:
         if not msg.parent_msg.has_audio:
             return []
 
         audio = msg.parent_msg.audio
-        await download_audio_file_if_not_in_cache(context.bot, audio)
-        original_filepath = f"media/{audio.file_unique_id}.mp3"
-        copy_filepath = original_filepath.replace(
-            audio.file_unique_id, generate_random_filename()
-        )
+        await download_audio_file_from_telegram_if_not_in_cache(context.bot, audio)
+        original_filepath = get_settings().cache_dir / f"{audio.file_unique_id}.mp3"
+        copy_filepath = generate_random_filename_in_cache(".mp3")
         shutil.copyfile(original_filepath, copy_filepath)
         return [copy_filepath]
 
@@ -101,29 +96,27 @@ def find_transformers(msg: MsgWrapper) -> list[list[str]]:
     return transformers
 
 
-def apply_transformer(filepath: str, name: str, args: list[str]) -> list[str]:
+def apply_transformer(filepath: Path, name: str, args: list[str]) -> list[Path]:
     if name in METADATA_TRANSFORMERS:
         mp3_utils.change_metadata(filepath, name, " ".join(args))
         return [filepath]
     elif name == "cut":
         start, end = args
-        mp3_utils.cut_audio(filepath, start, end)
-        return [filepath]
+        return [mp3_utils.cut_audio(filepath, start, end)]
     elif name == "cuthead":
         assert len(args) <= 1, "Too many arguments for cuthead (expected 0 or 1)"
         seconds = int(args[0]) if args else 5
-        filepaths: list[str] = []
-        for i in range(1, seconds + 1):
-            filepaths.append(
-                mp3_utils.cut_audio(filepath, start=i, end=0, overwrite=False)
-            )
-        os.remove(filepath)
+        filepaths: list[Path] = [
+            mp3_utils.cut_audio(filepath, start=i, end=0, overwrite=False)
+            for i in range(1, seconds + 1)
+        ]
+        filepath.unlink()
         return filepaths
     else:
         raise Exception("Unknown transformer name: " + name)
 
 
-def apply_transformers(filepath: str, transformers: list[list[str]]) -> list[str]:
+def apply_transformers(filepath: Path, transformers: list[list[str]]) -> list[Path]:
     filepaths = [filepath]
     for name, *args in transformers:
         filepaths = list(
@@ -171,18 +164,18 @@ async def handler_picture(update: Update, context: CallbackContext) -> None:
     assert len(files_to_edit) == 1
     target = files_to_edit[0]
 
-    picture_filename = generate_random_filename()
+    picture_filename = generate_random_filename_in_cache()
     await (await msg.picture).download_to_drive(picture_filename)
 
     thumbnail = convert_image_to_format(picture_filename, DESIRED_THUMBNAIL_FORMAT)
-    os.remove(picture_filename)
+    picture_filename.unlink()
 
     crop_image_to_square(thumbnail)
     mp3_utils.set_cover(target, thumbnail)
 
     await post_audio_to_telegram(update, context, target)
 
-    os.remove(thumbnail)
+    thumbnail.unlink()
 
 
 async def log_error_and_send_info_to_parent(
@@ -209,11 +202,10 @@ async def log_error_and_send_info_to_parent(
 
 
 def cleanup_cache() -> None:
-    mp3_files = [
-        os.path.join("media", f) for f in os.listdir("media") if f.endswith(".mp3")
-    ]
-    cutoff_time = time.time() - MAX_CACHE_FILE_AGE_S
+    cutoff_time = time.time() - get_settings().cache_timeout_seconds
 
-    for filename in mp3_files:
-        if os.stat(filename).st_mtime < cutoff_time:
-            os.remove(filename)
+    for filename in get_settings().cache_dir.iterdir():
+        if filename.name == ".gitkeep":
+            continue
+        if filename.stat().st_mtime < cutoff_time:
+            filename.unlink()

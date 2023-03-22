@@ -1,46 +1,46 @@
 from __future__ import annotations
 
 import math
-import os
 
+from pathlib import Path
 from typing import Any, cast
 
 import eyed3
 
-from utils import generate_random_filename, run_command, timestamp_to_seconds
+from utils import generate_random_filename_in_cache, run_command, timestamp_to_seconds
 
 
-def change_metadata(filename: str, field_name: str, data: str) -> None:
-    temp_filename = generate_random_filename() + ".mp3"
+def change_metadata(file: Path, field_name: str, data: str) -> None:
+    temp_filename = generate_random_filename_in_cache("mp3")
 
     run_command(
         [
             "ffmpeg",
             "-i",
-            filename,
+            file.as_posix(),
             "-metadata",
             rf"{field_name}={data}",
             "-codec",
             "copy",
-            temp_filename,
+            temp_filename.as_posix(),
         ],
     )
 
-    run_command(["mv", temp_filename, filename])
+    temp_filename.rename(file)
 
 
-def set_cover(filepath: str, cover_filepath: str) -> None:
+def set_cover(filepath: Path, cover_filepath: Path) -> None:
     # source: https://stackoverflow.com/a/18718265
 
-    temp_filename = generate_random_filename() + ".mp3"
+    temp_filename = generate_random_filename_in_cache("mp3")
 
     run_command(
         [
             "ffmpeg",
             "-i",
-            filepath,
+            filepath.as_posix(),
             "-i",
-            cover_filepath,
+            cover_filepath.as_posix(),
             "-map",
             "0:0",
             "-map",
@@ -53,15 +53,15 @@ def set_cover(filepath: str, cover_filepath: str) -> None:
             "title=Album cover",
             "-metadata:s:v",
             "comment=Cover (front)",
-            temp_filename,
+            temp_filename.as_posix(),
         ],
     )
 
-    run_command(["mv", temp_filename, filepath])
+    temp_filename.rename(filepath)
 
 
-def read_cover_image(filepath: str) -> bytes | None:
-    audio_file = eyed3.load(filepath)
+def read_cover_image(filepath: Path) -> bytes | None:
+    audio_file = eyed3.load(filepath.as_posix())
 
     try:
         return cast(bytes, audio_file.tag.images.get("Cover (front)").image_data)
@@ -75,21 +75,19 @@ def read_cover_image(filepath: str) -> bytes | None:
         return None
 
 
-def copy_cover_image(src: str, dest: str) -> None:
+def copy_cover_image(src: Path, dest: Path) -> None:
     image = read_cover_image(src)
     if not image:
         return
 
-    temp_cover_filename = generate_random_filename() + ".jpg"
-    with open(temp_cover_filename, "wb") as f:
-        f.write(image)
-
-    set_cover(dest, temp_cover_filename)
-    os.remove(temp_cover_filename)
+    temp_cover_file = generate_random_filename_in_cache(".jpg")
+    temp_cover_file.write_bytes(image)
+    set_cover(dest, temp_cover_file)
+    temp_cover_file.unlink()
 
 
-def read_metadata(filepath: str) -> dict[str, Any]:
-    audio_file = eyed3.load(filepath)
+def read_metadata(filepath: Path) -> dict[str, Any]:
+    audio_file = eyed3.load(filepath.as_posix())
 
     metadata = {
         "duration": audio_file.info.time_secs,
@@ -105,8 +103,8 @@ def read_metadata(filepath: str) -> dict[str, Any]:
 
 
 def cut_audio(
-    filepath: str, start: str | int, end: str | int, overwrite: bool = True
-) -> str:
+    filepath: Path, start: str | int, end: str | int, overwrite: bool = True
+) -> Path:
     if start == "0":
         start = 0
     if str(end).startswith("-") or end in ("0", 0):
@@ -116,7 +114,7 @@ def cut_audio(
     end_s = end if isinstance(end, int) else timestamp_to_seconds(end)
     duration_s = end_s - start_s
 
-    temp_filename = generate_random_filename() + ".mp3"
+    temp_filename = generate_random_filename_in_cache("mp3")
 
     run_command(
         [
@@ -126,17 +124,17 @@ def cut_audio(
             "-t",
             str(duration_s),
             "-i",
-            filepath,
+            filepath.as_posix(),
             "-acodec",
             "copy",
-            temp_filename,
+            temp_filename.as_posix(),
         ],
     )
 
     copy_cover_image(filepath, temp_filename)
 
     if overwrite:
-        run_command(["mv", temp_filename, filepath])
+        temp_filename.rename(filepath)
         return filepath
     else:
         return temp_filename

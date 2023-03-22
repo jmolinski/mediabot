@@ -86,7 +86,7 @@ class MsgWrapper:
     def is_authorized(self) -> bool:
         settings = get_settings()
 
-        return (
+        return settings.authorize_all or (
             self.author_id in settings.authorized_users
             or self.chat_id in settings.authorized_chats
         )
