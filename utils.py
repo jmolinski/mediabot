@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-import re
 import string
 import subprocess
 import sys
@@ -12,8 +11,6 @@ from typing import Any, TypeVar, cast
 from settings import get_default_logger
 
 T = TypeVar("T")
-
-CUSTOM_REACTION_PATTERN = re.compile(r"!(r(eact)?)\s+(.*)")
 
 
 def split_into_chunks(lst: list[T], n: int) -> list[list[T]]:
@@ -26,44 +23,20 @@ def get_name_from_author_obj(data: dict[Any, Any]) -> str:
     return cast(str, username or first_name)
 
 
-def extract_custom_reaction(t: str) -> str | None:
-    t = t.strip()
-    match = re.match(CUSTOM_REACTION_PATTERN, t)
-    if match is None:
-        return None
-
-    reaction = match.group(3).strip()
-    if not reaction:
-        return None
-
-    return reaction
-
-
-def extract_youtube_id(link: str) -> str:
-    link = link.strip()
-
-    if "youtu.be" in link:
-        return link.split("/")[-1]
-
-    link = link.split("/")[-1].split("?")[-1]
-    ids = [
-        ytid
-        for (argname, ytid) in [x.split("=") for x in link.split("&")]
-        if argname == "v"
-    ]
-    assert len(ids) == 1
-    return ids[0]
-
-
 def generate_random_filename_in_cache(ext: str = "", length: int = 20) -> Path:
     if ext and not ext.startswith("."):
         ext = "." + ext
 
+    tmp_ = "tmp_"
+    length -= len(tmp_)
+    assert length > 0
+
     import settings
 
     while True:
-        fname = "".join(
-            random.choice(string.ascii_letters + string.digits) for _ in range(length)
+        fname = tmp_ + "".join(
+            random.choice(string.ascii_letters + string.digits)
+            for _ in range(length - 4)
         )
 
         filename = settings.get_settings().cache_dir / (fname + ext)

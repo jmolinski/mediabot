@@ -76,13 +76,6 @@ class MsgWrapper:
         assert self.has_picture
         return await self.msg.photo[-1].get_file()
 
-    def extract_youtube_links(self) -> list[str]:
-        return [
-            p
-            for p in self.text.split()
-            if "https" in p and ("youtube.com" in p or "youtu.be" in p)
-        ]
-
     def is_authorized(self) -> bool:
         settings = get_settings()
 

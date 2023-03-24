@@ -85,3 +85,53 @@ def download_song(ytid: str) -> Path:
     set_metadata_from_info_file(output_filepath)
 
     return output_filepath
+
+
+def extract_youtube_id(link: str) -> str:
+    link = link.strip()
+
+    if "youtu.be" in link:
+        return link.split("/")[-1]
+
+    link = link.split("/")[-1].split("?")[-1]
+    ids = [
+        ytid
+        for (argname, ytid) in [x.split("=") for x in link.split("&")]
+        if argname == "v"
+    ]
+    assert len(ids) == 1
+    return ids[0]
+
+
+def playlist_url_to_video_urls(playlist_url: str) -> list[str]:
+    process_out = run_command(
+        [
+            "yt-dlp",
+            "--get-id",
+            "--skip-download",
+            "--flat-playlist",
+            playlist_url,
+        ],
+    )
+    youtube_id_length = 11
+    ids = {
+        i
+        for i in process_out.stdout.decode("utf-8").split("\n")
+        if len(i) == youtube_id_length
+    }
+    return [f"https://www.youtube.com/watch?v={i}" for i in ids]
+
+
+def extract_youtube_links(text: str) -> list[str]:
+    links_in_text = [t for t in text.split() if "https" in t]
+
+    youtube_links = [
+        p for p in links_in_text if ("youtube.com" in p or "youtu.be" in p)
+    ]
+    playlist_links = [p for p in youtube_links if "/playlist?" in p]
+    video_links = [p for p in youtube_links if p not in playlist_links]
+
+    for playlist_link in playlist_links:
+        video_links.extend(playlist_url_to_video_urls(playlist_link))
+
+    return video_links

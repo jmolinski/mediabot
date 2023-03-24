@@ -4,7 +4,6 @@ import itertools
 import os
 import shutil
 import time
-import traceback
 
 from pathlib import Path
 
@@ -22,11 +21,11 @@ from image_utils import (
 from message import MsgWrapper
 from sending_messages import (
     download_file_from_telegram_if_not_in_cache,
-    send_reply,
+    log_exception_and_notify_chat,
     send_reply_audio,
 )
 from settings import get_default_logger, get_settings
-from utils import extract_youtube_id, generate_random_filename_in_cache
+from utils import generate_random_filename_in_cache
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
@@ -50,26 +49,33 @@ async def post_audio_to_telegram(
     )
 
 
-async def download_files_from_youtube_if_not_in_cache(links: list[str]) -> list[Path]:
+async def download_audio_from_youtube_if_not_in_cache(
+    update: Update, context: CallbackContext, links: list[str]
+) -> list[Path]:
     targets = []
 
     for link in links:
-        yt_id = extract_youtube_id(link)
+        try:
+            yt_id = youtube_utils.extract_youtube_id(link)
 
-        original_filepath = get_settings().cache_dir / f"{yt_id}.mp3"
-        if not original_filepath.exists():
-            youtube_utils.download_song(yt_id)
-        assert original_filepath.exists()
+            original_filepath = get_settings().cache_dir / f"{yt_id}.mp3"
+            if not original_filepath.exists():
+                youtube_utils.download_song(yt_id)
+            assert original_filepath.exists()
 
-        copy_filepath = generate_random_filename_in_cache(".mp3")
-        shutil.copyfile(original_filepath, copy_filepath)
+            copy_filepath = generate_random_filename_in_cache(".mp3")
+            shutil.copyfile(original_filepath, copy_filepath)
 
-        targets.append(copy_filepath)
+            targets.append(copy_filepath)
+        except Exception as e:
+            await log_exception_and_notify_chat(update, context, e)
 
     return targets
 
 
-async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[Path]:
+async def fetch_targets(
+    update: Update, context: CallbackContext, msg: MsgWrapper
+) -> list[Path]:
     if msg.has_parent:
         if not msg.parent_msg.has_audio:
             return []
@@ -81,8 +87,9 @@ async def fetch_targets(context: CallbackContext, msg: MsgWrapper) -> list[Path]
         shutil.copyfile(original_filepath, copy_filepath)
         return [copy_filepath]
 
-    return await download_files_from_youtube_if_not_in_cache(
-        msg.extract_youtube_links()
+    youtube_links = youtube_utils.extract_youtube_links(msg.text)
+    return await download_audio_from_youtube_if_not_in_cache(
+        update, context, youtube_links
     )
 
 
@@ -135,8 +142,7 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
         return
     cleanup_cache()
 
-    files_to_edit = await fetch_targets(context, msg)
-
+    files_to_edit = await fetch_targets(update, context, msg)
     transformers = find_transformers(msg)
 
     for target in files_to_edit:
@@ -158,7 +164,7 @@ async def handler_picture(update: Update, context: CallbackContext) -> None:
     if not msg.has_parent:
         return
 
-    files_to_edit = await fetch_targets(context, msg)
+    files_to_edit = await fetch_targets(update, context, msg)
     if not files_to_edit:
         return
     assert len(files_to_edit) == 1
@@ -192,13 +198,8 @@ async def log_error_and_send_info_to_parent(
     if not update.message:
         return
 
-    try:
-        ex = context.error
-        assert isinstance(ex, Exception)
-        str_exp = "".join(traceback.format_exception(context.error))
-        await send_reply(update, context, f"```{str_exp}```", parse_mode="MarkdownV2")
-    except Exception as e:
-        get_default_logger().error("Error while sending error message: ", exc_info=e)
+    assert isinstance(context.error, Exception)
+    await log_exception_and_notify_chat(update, context, context.error)
 
 
 def cleanup_cache() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import traceback
 
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from telegram.ext import CallbackContext
 import mp3_utils
 
 from message import MsgWrapper
-from settings import get_settings
+from settings import get_default_logger, get_settings
 
 EMPTY_MSG = "\xad\xad"
 
@@ -128,3 +129,13 @@ async def send_reply_audio(
             **kwargs,
         )
     )
+
+
+async def log_exception_and_notify_chat(
+    update: Update, context: CallbackContext, exc: Exception
+) -> None:
+    try:
+        str_exp = "".join(traceback.format_exception(exc))
+        await send_reply(update, context, f"```{str_exp}```", parse_mode="MarkdownV2")
+    except Exception as e:
+        get_default_logger().error("Error while sending error message: ", exc_info=e)
