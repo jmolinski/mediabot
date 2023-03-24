@@ -2,95 +2,29 @@ from __future__ import annotations
 
 import itertools
 import os
-import shutil
 import time
 
 from pathlib import Path
 
-from telegram import Audio, Bot, Update
+from telegram import Update
 from telegram.ext import CallbackContext
 
 import mp3_utils
-import youtube_utils
 
 from image_utils import (
     DESIRED_THUMBNAIL_FORMAT,
     convert_image_to_format,
     crop_image_to_square,
 )
+from media_fetcher import fetch_targets
 from message import MsgWrapper
-from sending_messages import (
-    download_file_from_telegram_if_not_in_cache,
-    log_exception_and_notify_chat,
-    send_reply_audio,
-)
 from settings import get_default_logger, get_settings
+from telegram_helpers import log_exception_and_notify_chat, post_audio_to_telegram
 from utils import generate_random_filename_in_cache
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
 TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
-
-
-async def download_audio_file_from_telegram_if_not_in_cache(
-    bot: Bot, audio: Audio
-) -> Path:
-    return await download_file_from_telegram_if_not_in_cache(
-        bot, audio.file_id, audio.file_unique_id, "mp3"
-    )
-
-
-async def post_audio_to_telegram(
-    update: Update, context: CallbackContext, audio_filepath: Path
-) -> Path:
-    ret = await send_reply_audio(update, audio_filepath)
-    return await download_audio_file_from_telegram_if_not_in_cache(
-        context.bot, ret.audio
-    )
-
-
-async def download_audio_from_youtube_if_not_in_cache(
-    update: Update, context: CallbackContext, links: list[str]
-) -> list[Path]:
-    targets = []
-
-    for link in links:
-        try:
-            yt_id = youtube_utils.extract_youtube_id(link)
-
-            original_filepath = get_settings().cache_dir / f"{yt_id}.mp3"
-            if not original_filepath.exists():
-                youtube_utils.download_song(yt_id)
-            assert original_filepath.exists()
-
-            copy_filepath = generate_random_filename_in_cache(".mp3")
-            shutil.copyfile(original_filepath, copy_filepath)
-
-            targets.append(copy_filepath)
-        except Exception as e:
-            await log_exception_and_notify_chat(update, context, e)
-
-    return targets
-
-
-async def fetch_targets(
-    update: Update, context: CallbackContext, msg: MsgWrapper
-) -> list[Path]:
-    if msg.has_parent:
-        if not msg.parent_msg.has_audio:
-            return []
-
-        audio = msg.parent_msg.audio
-        await download_audio_file_from_telegram_if_not_in_cache(context.bot, audio)
-        original_filepath = get_settings().cache_dir / f"{audio.file_unique_id}.mp3"
-        copy_filepath = generate_random_filename_in_cache(".mp3")
-        shutil.copyfile(original_filepath, copy_filepath)
-        return [copy_filepath]
-
-    youtube_links = youtube_utils.extract_youtube_links(msg.text)
-    return await download_audio_from_youtube_if_not_in_cache(
-        update, context, youtube_links
-    )
 
 
 def find_transformers(msg: MsgWrapper) -> list[list[str]]:

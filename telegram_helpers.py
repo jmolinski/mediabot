@@ -6,7 +6,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from telegram import Bot, InlineKeyboardMarkup, Update
+from telegram import Audio, Bot, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
 import mp3_utils
@@ -139,3 +139,20 @@ async def log_exception_and_notify_chat(
         await send_reply(update, context, f"```{str_exp}```", parse_mode="MarkdownV2")
     except Exception as e:
         get_default_logger().error("Error while sending error message: ", exc_info=e)
+
+
+async def download_audio_file_from_telegram_if_not_in_cache(
+    bot: Bot, audio: Audio
+) -> Path:
+    return await download_file_from_telegram_if_not_in_cache(
+        bot, audio.file_id, audio.file_unique_id, "mp3"
+    )
+
+
+async def post_audio_to_telegram(
+    update: Update, context: CallbackContext, audio_filepath: Path
+) -> Path:
+    ret = await send_reply_audio(update, audio_filepath)
+    return await download_audio_file_from_telegram_if_not_in_cache(
+        context.bot, ret.audio
+    )
