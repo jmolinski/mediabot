@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import random
 import string
 import subprocess
@@ -8,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
-from settings import get_default_logger
+from settings import get_default_logger, get_settings
 
 T = TypeVar("T")
 
@@ -68,3 +69,12 @@ def timestamp_to_seconds(timestamp: str) -> int:
         seconds += x * 60**i
 
     return seconds
+
+
+def url_signature(url: str) -> str:
+    return hashlib.md5(url.strip().encode()).hexdigest()
+
+
+def cache_path_for_url(url: str) -> Path:
+    url_sig = url_signature(url)
+    return get_settings().cache_dir / f"{url_sig}.mp3"

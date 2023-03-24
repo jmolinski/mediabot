@@ -13,24 +13,30 @@ from image_utils import (
     crop_image_to_square,
 )
 from settings import get_default_logger, get_settings
-from utils import run_command
+from utils import cache_path_for_url, run_command
 
 
-def set_metadata_from_info_file(mp3_filepath: Path) -> None:
-    info_json_filepath = mp3_filepath.with_name(mp3_filepath.name + ".info.json")
+def set_metadata_from_info_file(mp3_path: Path) -> None:
+    info_json_path = [
+        p
+        for p in mp3_path.parent.glob(f"{mp3_path.stem}.*")
+        if p.name.endswith(".info.json")
+    ][0]
 
-    title = json.loads(info_json_filepath.read_text())["title"]
+    found_metadata = json.loads(info_json_path.read_text())
 
-    mp3_utils.change_metadata(mp3_filepath, "title", title)
+    mp3_utils.change_metadata(mp3_path, "title", found_metadata["title"])
+    if "album" in found_metadata:
+        mp3_utils.change_metadata(mp3_path, "album", found_metadata["album"])
 
-    info_json_filepath.unlink()
+    info_json_path.unlink()
 
 
 def merge_mp3_with_cover(mp3_path: Path) -> None:
     thumbnails = [
         p
-        for p in mp3_path.parent.glob(f"{mp3_path.name}.*")
-        if not p.name.endswith(".info.json")
+        for p in mp3_path.parent.glob(f"{mp3_path.stem}.*")
+        if not p.name.endswith(".info.json") and not p.name.endswith(".mp3")
     ]
 
     assert len(thumbnails) > 0
@@ -54,10 +60,14 @@ def merge_mp3_with_cover(mp3_path: Path) -> None:
         os.remove(thumbnail_filepath)
 
 
-def download_song(ytid: str) -> Path:
-    get_default_logger().info(f"Downloading youtube audio from id: {ytid}")
+def ytdl_download_song(url: str) -> Path:
+    output_filename = cache_path_for_url(url)
 
-    output_filepath = get_settings().cache_dir / f"{ytid}.mp3"
+    get_default_logger().info(
+        f"Downloading youtube audio from url: {url} with filename {output_filename}"
+    )
+
+    output_filepath = get_settings().cache_dir / output_filename
 
     run_command(
         [
@@ -73,13 +83,12 @@ def download_song(ytid: str) -> Path:
             "0",
             "--output",
             output_filepath.as_posix(),
-            "--write-thumbnail",
-            f"https://www.youtube.com/watch?v={ytid}",
+            url,
         ],
     )
-    get_default_logger().info(f"Audio from id {ytid} downloaded")
 
     assert output_filepath.exists()
+    get_default_logger().info(f"Audio from url {url} downloaded")
 
     merge_mp3_with_cover(output_filepath)
     set_metadata_from_info_file(output_filepath)
