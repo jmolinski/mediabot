@@ -110,12 +110,12 @@ async def send_reply_audio(
     if thumbnail is None:
         thumbnail = mp3_utils.read_cover_image(audio)
     if thumbnail:
-        metadata["thumb"] = thumbnail
+        metadata["thumbnail"] = thumbnail
 
     metadata = {
         k: v
         for k, v in metadata.items()
-        if k in ("title", "performer", "thumb", "filename", "duration")
+        if k in ("title", "performer", "thumbnail", "filename", "duration")
     }
 
     return MsgWrapper(

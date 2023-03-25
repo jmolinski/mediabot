@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 
 from pathlib import Path
@@ -21,6 +22,19 @@ from utils import generate_random_filename_in_cache
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
 TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
+
+BANDCAMP_PLAYLIST_RE = re.compile(r"^https://[\w\-]+\.bandcamp\.com/album/[\w\-]+$")
+BANDCAMP_SONG_RE = re.compile(r"^https://[\w\-]+\.bandcamp\.com/track/[\w\-]+$")
+
+YOUTUBE_PLAYLIST_RE = re.compile(
+    r"^https?://(?:www\.)?(?:music\.)?youtube\.com/playlist\?(list=[\w-]+)$"
+)
+YOUTUBE_SONG_RES = [
+    re.compile(r"^https://(?:www\.)?youtu\.be/([\w-]+)$"),
+    re.compile(
+        r"^https?://(?:www\.)?(?:music\.)?youtube\.com/watch\?(?=.*v=)(?:\S+)?v=([\w-]+)(?:\S+)?$"
+    ),
+]
 
 
 async def download_audio_from_url_if_not_in_cache(
@@ -59,39 +73,34 @@ async def fetch_parent_message_target(
     return []
 
 
-async def extract_bandcamp_links(text: str) -> list[str]:
-    links_in_text = [t for t in text.split() if "https" in t]
+async def extract_video_links(
+    text: str,
+    song_patterns: list[re.Pattern],
+    playlist_patterns: list[re.Pattern],
+) -> list[str]:
+    links_in_text = [t for t in text.split() if t.startswith("https")]
 
-    bandcamp_links = [p for p in links_in_text if ".bandcamp.com/" in p]
-    playlist_links = [p for p in bandcamp_links if ".com/album/" in p]
-    video_links = [p for p in bandcamp_links if p not in playlist_links]
+    song_links: list[str] = []
+    for song_pattern in song_patterns:
+        song_links.extend([p for p in links_in_text if re.match(song_pattern, p)])
 
-    for playlist_link in playlist_links:
-        video_links.extend(youtube_utils.playlist_url_to_video_urls(playlist_link))
+    for playlist_pattern in playlist_patterns:
+        playlist_links = [p for p in links_in_text if re.match(playlist_pattern, p)]
+        for playlist_link in playlist_links:
+            song_links.extend(youtube_utils.playlist_url_to_video_urls(playlist_link))
 
-    return video_links
+    return [utils.remove_query_parameter_from_url(url, "list") for url in song_links]
 
 
-async def extract_youtube_links(text: str) -> list[str]:
-    links_in_text = [t for t in text.split() if "https" in t]
-    # TODO fix to regexes
-    youtube_links = [
-        p for p in links_in_text if ("youtube.com" in p or "youtu.be" in p)
+async def collect_link_targets(text: str) -> list[str]:
+    patterns_for_services: list[tuple[list[re.Pattern], list[re.Pattern]]] = [
+        (YOUTUBE_SONG_RES, [YOUTUBE_PLAYLIST_RE]),
+        ([BANDCAMP_SONG_RE], [BANDCAMP_PLAYLIST_RE]),
     ]
-    playlist_links = [p for p in youtube_links if "/playlist?" in p]
-    video_links = [p for p in youtube_links if p not in playlist_links]
 
-    for playlist_link in playlist_links:
-        video_links.extend(youtube_utils.playlist_url_to_video_urls(playlist_link))
-
-    return video_links
-
-
-async def collect_link_targets(msg: MsgWrapper) -> list[str]:
-    link_extractors = [extract_youtube_links, extract_bandcamp_links]
     links = []
-    for link_extractor in link_extractors:
-        links.extend(await link_extractor(msg.text))
+    for patterns_for_service in patterns_for_services:
+        links.extend(await extract_video_links(text, *patterns_for_service))
     return links
 
 
@@ -102,6 +111,6 @@ async def fetch_targets(
     if parent_message_target:
         return parent_message_target
 
-    links = await collect_link_targets(msg)
+    links = await collect_link_targets(msg.text)
 
     return await download_audio_from_url_if_not_in_cache(update, context, links)

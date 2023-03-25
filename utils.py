@@ -5,6 +5,7 @@ import random
 import string
 import subprocess
 import sys
+import urllib.parse
 
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -84,3 +85,13 @@ def url_signature(url: str) -> str:
 def cache_path_for_url(url: str) -> Path:
     url_sig = url_signature(url)
     return get_settings().cache_dir / f"{url_sig}.mp3"
+
+
+def remove_query_parameter_from_url(url: str, parameter: str) -> str:
+    # remove a query parameter from the url
+    # source: https://stackoverflow.com/a/1208857
+    u = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(u.query, keep_blank_values=True)
+    query.pop(parameter, None)
+    u = u._replace(query=urllib.parse.urlencode(query, True))
+    return urllib.parse.urlunparse(u)
