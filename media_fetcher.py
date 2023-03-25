@@ -36,6 +36,9 @@ YOUTUBE_SONG_RES = [
     ),
 ]
 
+SOUNDCLOUD_PLAYLIST_RE = re.compile(r"^https://soundcloud\.com/[\w\-]+/sets/[\w\-]+$")
+SOUNDCLOUD_SONG_RE = re.compile(r"^https://soundcloud\.com/[\w\-]+/[\w\-]+$")
+
 
 async def download_audio_from_url_if_not_in_cache(
     update: Update, context: CallbackContext, links: list[str]
@@ -96,6 +99,7 @@ async def collect_link_targets(text: str) -> list[str]:
     patterns_for_services: list[tuple[list[re.Pattern], list[re.Pattern]]] = [
         (YOUTUBE_SONG_RES, [YOUTUBE_PLAYLIST_RE]),
         ([BANDCAMP_SONG_RE], [BANDCAMP_PLAYLIST_RE]),
+        ([SOUNDCLOUD_SONG_RE], [SOUNDCLOUD_PLAYLIST_RE]),
     ]
 
     links = []
