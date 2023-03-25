@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 from pathlib import Path
 
@@ -12,8 +13,12 @@ from image_utils import (
     convert_image_to_format,
     crop_image_to_square,
 )
-from settings import get_default_logger, get_settings
+from settings import get_default_logger
 from utils import cache_path_for_url, run_command
+
+URL_PATTERN_RE = re.compile(
+    "^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$"
+)
 
 
 def set_metadata_from_info_file(mp3_path: Path) -> None:
@@ -61,13 +66,11 @@ def merge_mp3_with_cover(mp3_path: Path) -> None:
 
 
 def ytdl_download_song(url: str) -> Path:
-    output_filename = cache_path_for_url(url)
+    output_filepath = cache_path_for_url(url)
 
     get_default_logger().info(
-        f"Downloading youtube audio from url: {url} with filename {output_filename}"
+        f"Downloading youtube audio from url: {url} with filename {output_filepath}"
     )
-
-    output_filepath = get_settings().cache_dir / output_filename
 
     run_command(
         [
@@ -113,34 +116,16 @@ def extract_youtube_id(link: str) -> str:
 
 
 def playlist_url_to_video_urls(playlist_url: str) -> list[str]:
-    process_out = run_command(
-        [
-            "yt-dlp",
-            "--get-id",
-            "--skip-download",
-            "--flat-playlist",
-            playlist_url,
-        ],
+    p1 = run_command(
+        ["yt-dlp", "--skip-download", playlist_url, "-j"], allow_errors=True
     )
-    youtube_id_length = 11
-    ids = {
-        i
-        for i in process_out.stdout.decode("utf-8").split("\n")
-        if len(i) == youtube_id_length
-    }
-    return [f"https://www.youtube.com/watch?v={i}" for i in ids]
+    p2 = run_command(["jq", "-r", ".webpage_url"], stdin=p1.stdout)
 
-
-def extract_youtube_links(text: str) -> list[str]:
-    links_in_text = [t for t in text.split() if "https" in t]
-
-    youtube_links = [
-        p for p in links_in_text if ("youtube.com" in p or "youtu.be" in p)
+    # Validate URLs
+    possible_links = p2.stdout.decode("utf-8").split("\n")
+    links = [
+        url
+        for url in possible_links
+        if re.match(URL_PATTERN_RE, url) and "playlist" not in url
     ]
-    playlist_links = [p for p in youtube_links if "/playlist?" in p]
-    video_links = [p for p in youtube_links if p not in playlist_links]
-
-    for playlist_link in playlist_links:
-        video_links.extend(playlist_url_to_video_urls(playlist_link))
-
-    return video_links
+    return links

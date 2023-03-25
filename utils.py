@@ -45,12 +45,18 @@ def generate_random_filename_in_cache(ext: str = "", length: int = 20) -> Path:
             return filename
 
 
-def run_command(cmd: list[str], expected_code: int = 0) -> subprocess.CompletedProcess:
+def run_command(
+    cmd: list[str],
+    expected_code: int = 0,
+    allow_errors: bool = False,
+    as_shell: bool = False,
+    stdin: bytes | None = None,
+) -> subprocess.CompletedProcess:
     get_default_logger().debug(f"Running command: {' '.join(cmd)}")
 
-    ret = subprocess.run(cmd, shell=False, capture_output=True)
+    ret = subprocess.run(cmd, shell=as_shell, capture_output=True, input=stdin)
 
-    if expected_code != -1 and ret.returncode != expected_code:
+    if not allow_errors and ret.returncode != expected_code:
         print(ret.stdout)
         print(ret.stderr, file=sys.stderr)
 
