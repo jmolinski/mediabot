@@ -19,8 +19,8 @@ from utils import url_to_thumbnail_filename
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
-PHOTO_TRANSFORMERS = ("cover",)
-TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS + PHOTO_TRANSFORMERS
+GENERAL_TRANSFORMERS = ("cover", "replacetitle")
+TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS + GENERAL_TRANSFORMERS
 
 
 def find_transformers(text: str) -> list[list[str]]:
@@ -41,6 +41,17 @@ def apply_transformer(filepath: Path, name: str, args: list[str]) -> list[Path]:
         picture_url = args[0]
         thumbnail_filepath = url_to_thumbnail_filename(picture_url)
         mp3_utils.set_cover(filepath, thumbnail_filepath)
+        return [filepath]
+    elif name == "replacetitle":
+        # format: replacetitle a;b
+        arg = " ".join(args).strip()
+        if arg.endswith(";"):
+            old_part, new_part = arg.strip(";"), ""
+        else:
+            old_part, new_part = arg.split(";")
+        old_title = mp3_utils.read_metadata(filepath)["title"]
+        new_title = old_title.replace(old_part, new_part).strip()
+        mp3_utils.change_metadata(filepath, "title", new_title)
         return [filepath]
     elif name == "cut":
         start, end = args
