@@ -19,10 +19,6 @@ from telegram_helpers import (
 )
 from utils import generate_random_filename_in_cache
 
-METADATA_TRANSFORMERS = ("title", "artist", "album")
-LENGTH_TRANSFORMERS = ("cut", "cuthead")
-TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
-
 BANDCAMP_PLAYLIST_RE = re.compile(r"^https://[\w\-]+\.bandcamp\.com/album/[\w\-]+$")
 BANDCAMP_SONG_RE = re.compile(r"^https://[\w\-]+\.bandcamp\.com/track/[\w\-]+$")
 
@@ -47,7 +43,7 @@ async def download_audio_from_url_if_not_in_cache(
 
     for link in links:
         try:
-            original_filepath = utils.cache_path_for_url(link)
+            original_filepath = utils.cache_path_for_mp3_url(link)
             if not original_filepath.exists():
                 downloaded_song = youtube_utils.ytdl_download_song(link)
                 assert downloaded_song.as_posix() == original_filepath.as_posix()

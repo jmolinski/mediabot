@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 
 from pathlib import Path
 
@@ -14,11 +13,7 @@ from image_utils import (
     crop_image_to_square,
 )
 from settings import get_default_logger
-from utils import cache_path_for_url, run_command
-
-URL_PATTERN_RE = re.compile(
-    "^https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$"
-)
+from utils import cache_path_for_mp3_url, run_command
 
 
 def set_metadata_from_info_file(mp3_path: Path) -> None:
@@ -44,7 +39,9 @@ def merge_mp3_with_cover(mp3_path: Path) -> None:
         if not p.name.endswith(".info.json") and not p.name.endswith(".mp3")
     ]
 
-    assert len(thumbnails) > 0
+    if len(thumbnails) == 0:
+        get_default_logger().info(f"No thumbnails found for {mp3_path}")
+        return
 
     if any(
         desired_format_thumbnails := [
@@ -66,7 +63,7 @@ def merge_mp3_with_cover(mp3_path: Path) -> None:
 
 
 def ytdl_download_song(url: str) -> Path:
-    output_filepath = cache_path_for_url(url)
+    output_filepath = cache_path_for_mp3_url(url)
 
     get_default_logger().info(
         f"Downloading youtube audio from url: {url} with filename {output_filepath}"
@@ -126,6 +123,6 @@ def playlist_url_to_video_urls(playlist_url: str) -> list[str]:
     links = [
         url
         for url in possible_links
-        if re.match(URL_PATTERN_RE, url) and "playlist" not in url
+        if url.startswith("https") and "playlist" not in url
     ]
     return links

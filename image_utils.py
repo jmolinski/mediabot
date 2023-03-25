@@ -37,3 +37,9 @@ def crop_image_to_square(path_to_image: Path) -> None:
         (THUMBNAIL_WIDTH, THUMBNAIL_WIDTH), Image.LANCZOS
     )
     im_thumb.save(path_to_image, quality=95)
+
+
+def convert_raw_picture_to_thumbnail_format_and_shape(picture_filename: Path) -> Path:
+    thumbnail = convert_image_to_format(picture_filename, DESIRED_THUMBNAIL_FORMAT)
+    crop_image_to_square(thumbnail)
+    return thumbnail

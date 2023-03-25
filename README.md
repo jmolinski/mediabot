@@ -20,6 +20,4 @@ Requires a config.json file in the root directory with the following format:
 
 2. TODOs
 
-- other audio sources (soundcloud, bandcamp?, etc)
-- yt playlists
 - mass set tags -> 'apply to all next'?

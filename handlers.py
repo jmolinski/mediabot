@@ -11,25 +11,21 @@ from telegram.ext import CallbackContext
 
 import mp3_utils
 
-from image_utils import (
-    DESIRED_THUMBNAIL_FORMAT,
-    convert_image_to_format,
-    crop_image_to_square,
-)
 from media_fetcher import fetch_targets
 from message import MsgWrapper
 from settings import get_default_logger, get_settings
 from telegram_helpers import log_exception_and_notify_chat, post_audio_to_telegram
-from utils import generate_random_filename_in_cache
+from utils import url_to_thumbnail_filename
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead")
-TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS
+PHOTO_TRANSFORMERS = ("cover",)
+TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS + PHOTO_TRANSFORMERS
 
 
-def find_transformers(msg: MsgWrapper) -> list[list[str]]:
+def find_transformers(text: str) -> list[list[str]]:
     nonempty_lines = [
-        line.strip().split(" ") for line in msg.text.split("\n") if line.strip()
+        line.strip().split(" ") for line in text.split("\n") if line.strip()
     ]
     transformers = [line for line in nonempty_lines if line[0] in TRANSFORMERS]
 
@@ -40,6 +36,11 @@ def find_transformers(msg: MsgWrapper) -> list[list[str]]:
 def apply_transformer(filepath: Path, name: str, args: list[str]) -> list[Path]:
     if name in METADATA_TRANSFORMERS:
         mp3_utils.change_metadata(filepath, name, " ".join(args))
+        return [filepath]
+    elif name == "cover":
+        picture_url = args[0]
+        thumbnail_filepath = url_to_thumbnail_filename(picture_url)
+        mp3_utils.set_cover(filepath, thumbnail_filepath)
         return [filepath]
     elif name == "cut":
         start, end = args
@@ -68,16 +69,18 @@ def apply_transformers(filepath: Path, transformers: list[list[str]]) -> list[Pa
     return filepaths
 
 
-async def handler_message(update: Update, context: CallbackContext) -> None:
-    get_default_logger().info("Message received")
-
+async def react_to_command(
+    update: Update, context: CallbackContext, extra_text: str = ""
+) -> None:
     msg = MsgWrapper(update.message)
     if not msg.is_authorized():
         return
     cleanup_cache()
 
     files_to_edit = await fetch_targets(update, context, msg)
-    transformers = find_transformers(msg)
+
+    msg_text = msg.text + "\n" + extra_text
+    transformers = find_transformers(msg_text)
 
     for target in files_to_edit:
         transformed_target = apply_transformers(target, transformers)
@@ -87,35 +90,18 @@ async def handler_message(update: Update, context: CallbackContext) -> None:
             os.remove(f)
 
 
+async def handler_message(update: Update, context: CallbackContext) -> None:
+    get_default_logger().info("Message received")
+
+    await react_to_command(update, context)
+
+
 async def handler_picture(update: Update, context: CallbackContext) -> None:
     get_default_logger().info("Picture received")
 
-    msg = MsgWrapper(update.message)
-    if not msg.is_authorized():
-        return
-    cleanup_cache()
+    picture_url = (await MsgWrapper(update.message).picture).file_path
 
-    if not msg.has_parent:
-        return
-
-    files_to_edit = await fetch_targets(update, context, msg)
-    if not files_to_edit:
-        return
-    assert len(files_to_edit) == 1
-    target = files_to_edit[0]
-
-    picture_filename = generate_random_filename_in_cache()
-    await (await msg.picture).download_to_drive(picture_filename)
-
-    thumbnail = convert_image_to_format(picture_filename, DESIRED_THUMBNAIL_FORMAT)
-    picture_filename.unlink()
-
-    crop_image_to_square(thumbnail)
-    mp3_utils.set_cover(target, thumbnail)
-
-    await post_audio_to_telegram(update, context, target)
-
-    thumbnail.unlink()
+    await react_to_command(update, context, extra_text=f"cover {picture_url}")
 
 
 async def log_error_and_send_info_to_parent(

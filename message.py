@@ -46,7 +46,8 @@ class MsgWrapper:
 
     @property
     def text(self) -> str:
-        assert self.msg.text is not None
+        if self.msg.text is None:
+            return ""
         return cast(str, self.msg.text.strip())
 
     @property

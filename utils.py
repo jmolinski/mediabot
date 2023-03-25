@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 import string
 import subprocess
 import sys
 import urllib.parse
+import urllib.request
 
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
+from image_utils import convert_raw_picture_to_thumbnail_format_and_shape
 from settings import get_default_logger, get_settings
 
 T = TypeVar("T")
@@ -82,9 +85,14 @@ def url_signature(url: str) -> str:
     return hashlib.md5(url.strip().encode()).hexdigest()
 
 
-def cache_path_for_url(url: str) -> Path:
+def cache_path_for_mp3_url(url: str) -> Path:
+    return cache_path_for_url(url, ".mp3")
+
+
+def cache_path_for_url(url: str, ext: str = "") -> Path:
     url_sig = url_signature(url)
-    return get_settings().cache_dir / f"{url_sig}.mp3"
+    ext = ext if ext.startswith(".") else "." + ext
+    return get_settings().cache_dir / f"{url_sig}{ext}"
 
 
 def remove_query_parameter_from_url(url: str, parameter: str) -> str:
@@ -95,3 +103,22 @@ def remove_query_parameter_from_url(url: str, parameter: str) -> str:
     query.pop(parameter, None)
     u = u._replace(query=urllib.parse.urlencode(query, True))
     return urllib.parse.urlunparse(u)
+
+
+def download_url_to_cache(url: str) -> Path:
+    assert url.startswith("https")
+    output_filepath = cache_path_for_url(url)
+    urllib.request.urlretrieve(url, output_filepath)
+    return output_filepath
+
+
+def url_to_thumbnail_filename(picture_url: str) -> Path:
+    expected_filename = cache_path_for_url(picture_url)
+    if expected_filename.exists():
+        return expected_filename
+
+    picture_filename = download_url_to_cache(picture_url)
+    thumbnail = convert_raw_picture_to_thumbnail_format_and_shape(picture_filename)
+    os.rename(thumbnail, picture_filename)
+    assert expected_filename == picture_filename
+    return picture_filename
