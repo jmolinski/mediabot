@@ -91,7 +91,7 @@ def cache_path_for_mp3_url(url: str) -> Path:
 
 def cache_path_for_url(url: str, ext: str = "") -> Path:
     url_sig = url_signature(url)
-    ext = ext if ext.startswith(".") else "." + ext
+    ext = ext if ext == "" or ext.startswith(".") else "." + ext
     return get_settings().cache_dir / f"{url_sig}{ext}"
 
 

@@ -29,7 +29,6 @@ def find_transformers(text: str) -> list[list[str]]:
     ]
     transformers = [line for line in nonempty_lines if line[0] in TRANSFORMERS]
 
-    assert len(transformers) == len(set(t[0] for t in transformers))
     return transformers
 
 

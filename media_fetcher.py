@@ -19,21 +19,25 @@ from telegram_helpers import (
 )
 from utils import generate_random_filename_in_cache
 
-BANDCAMP_PLAYLIST_RE = re.compile(r"^https://[\w\-]+\.bandcamp\.com/album/[\w\-]+$")
-BANDCAMP_SONG_RE = re.compile(r"^https://[\w\-]+\.bandcamp\.com/track/[\w\-]+$")
+BANDCAMP_PLAYLIST_PATTERN = re.compile(
+    r"^https://[\w\-]+\.bandcamp\.com/album/[\w\-]+$"
+)
+BANDCAMP_SONG_PATTERN = re.compile(r"^https://[\w\-]+\.bandcamp\.com/track/[\w\-]+$")
 
-YOUTUBE_PLAYLIST_RE = re.compile(
+YOUTUBE_PLAYLIST_PATTERN = re.compile(
     r"^https?://(?:www\.)?(?:music\.)?youtube\.com/playlist\?(list=[\w-]+)$"
 )
-YOUTUBE_SONG_RES = [
+YOUTUBE_SONG_PATTERNS = [
     re.compile(r"^https://(?:www\.)?youtu\.be/([\w-]+)$"),
     re.compile(
         r"^https?://(?:www\.)?(?:music\.)?youtube\.com/watch\?(?=.*v=)(?:\S+)?v=([\w-]+)(?:\S+)?$"
     ),
 ]
 
-SOUNDCLOUD_PLAYLIST_RE = re.compile(r"^https://soundcloud\.com/[\w\-]+/sets/[\w\-]+$")
-SOUNDCLOUD_SONG_RE = re.compile(r"^https://soundcloud\.com/[\w\-]+/[\w\-]+$")
+SOUNDCLOUD_PLAYLIST_PATTERNS = re.compile(
+    r"^https://soundcloud\.com/[\w\-]+/sets/[\w\-]+$"
+)
+SOUNDCLOUD_SONG_PATTERNS = re.compile(r"^https://soundcloud\.com/[\w\-]+/[\w\-]+$")
 
 
 async def download_audio_from_url_if_not_in_cache(
@@ -93,9 +97,9 @@ async def extract_video_links(
 
 async def collect_link_targets(text: str) -> list[str]:
     patterns_for_services: list[tuple[list[re.Pattern], list[re.Pattern]]] = [
-        (YOUTUBE_SONG_RES, [YOUTUBE_PLAYLIST_RE]),
-        ([BANDCAMP_SONG_RE], [BANDCAMP_PLAYLIST_RE]),
-        ([SOUNDCLOUD_SONG_RE], [SOUNDCLOUD_PLAYLIST_RE]),
+        (YOUTUBE_SONG_PATTERNS, [YOUTUBE_PLAYLIST_PATTERN]),
+        ([BANDCAMP_SONG_PATTERN], [BANDCAMP_PLAYLIST_PATTERN]),
+        ([SOUNDCLOUD_SONG_PATTERNS], [SOUNDCLOUD_PLAYLIST_PATTERNS]),
     ]
 
     links = []
