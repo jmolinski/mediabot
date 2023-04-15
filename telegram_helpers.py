@@ -119,6 +119,7 @@ async def send_reply_audio(
     }
 
     return MsgWrapper(
+        # TODO reply media group
         await update.message.reply_audio(
             audio=audio,
             **metadata,
@@ -151,8 +152,10 @@ async def download_audio_file_from_telegram_if_not_in_cache(
 
 async def post_audio_to_telegram(
     update: Update, context: CallbackContext, audio_filepath: Path
-) -> Path:
-    ret = await send_reply_audio(update, audio_filepath)
-    return await download_audio_file_from_telegram_if_not_in_cache(
-        context.bot, ret.audio
-    )
+) -> None:
+    await send_reply_audio(update, audio_filepath)
+    # ret = await send_reply_audio(update, audio_filepath)
+    # return await download_audio_file_from_telegram_if_not_in_cache(
+    #    context.bot, ret.audio
+    # )
+    return None

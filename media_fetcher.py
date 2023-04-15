@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import concurrent.futures
+import os
 import re
 import shutil
 
@@ -40,27 +42,41 @@ SOUNDCLOUD_PLAYLIST_PATTERNS = re.compile(
 SOUNDCLOUD_SONG_PATTERNS = re.compile(r"^https://soundcloud\.com/[\w\-]+/[\w\-]+$")
 
 
+def _download_song_from_url_if_not_in_cache(link: str) -> Path:
+    original_filepath = utils.cache_path_for_mp3_url(link)
+    if not original_filepath.exists():
+        downloaded_song = youtube_utils.ytdl_download_song(link)
+        assert downloaded_song.as_posix() == original_filepath.as_posix()
+    assert original_filepath.exists()
+
+    return original_filepath
+
+
 async def download_audio_from_url_if_not_in_cache(
     update: Update, context: CallbackContext, links: list[str]
 ) -> list[Path]:
-    targets = []
+    link_to_path: dict[str, Path] = {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+        future_to_link = {
+            executor.submit(_download_song_from_url_if_not_in_cache, link): link
+            for link in links
+        }
+        for future in concurrent.futures.as_completed(future_to_link):
+            try:
+                link_to_path[future_to_link[future]] = future.result()
+            except Exception as exc:
+                await log_exception_and_notify_chat(update, context, exc)
+                raise
+
+    copied_audio_files = []
 
     for link in links:
-        try:
-            original_filepath = utils.cache_path_for_mp3_url(link)
-            if not original_filepath.exists():
-                downloaded_song = youtube_utils.ytdl_download_song(link)
-                assert downloaded_song.as_posix() == original_filepath.as_posix()
-            assert original_filepath.exists()
+        copy_filepath = generate_random_filename_in_cache(".mp3")
+        shutil.copyfile(link_to_path[link], copy_filepath)
+        copied_audio_files.append(copy_filepath)
 
-            copy_filepath = generate_random_filename_in_cache(".mp3")
-            shutil.copyfile(original_filepath, copy_filepath)
-
-            targets.append(copy_filepath)
-        except Exception as e:
-            await log_exception_and_notify_chat(update, context, e)
-
-    return targets
+    return copied_audio_files
 
 
 async def fetch_parent_message_target(

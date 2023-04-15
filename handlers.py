@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import itertools
 import os
 import time
@@ -30,6 +31,16 @@ def find_transformers(text: str) -> list[list[str]]:
     transformers = [line for line in nonempty_lines if line[0] in TRANSFORMERS]
 
     return transformers
+
+
+def prepare_transformers(transformers: list[list[str]]) -> None:
+    for name, *args in transformers:
+        if name == "cover":
+            picture_url = args[0]
+            thumbnail_filepath = url_to_thumbnail_filename(picture_url)
+            assert thumbnail_filepath.exists(), "Thumbnail file does not exist"
+        else:
+            pass  # other transformers don't need preparation
 
 
 def apply_transformer(filepath: Path, name: str, args: list[str]) -> list[Path]:
@@ -91,11 +102,24 @@ async def react_to_command(
 
     msg_text = msg.text + "\n" + extra_text
     transformers = find_transformers(msg_text)
+    prepare_transformers(transformers)
+
+    target_to_transformed_files: dict[Path, list[Path]] = {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+        future_to_target = {
+            executor.submit(apply_transformers, target, transformers): target
+            for target in files_to_edit
+        }
+        for future in concurrent.futures.as_completed(future_to_target):
+            try:
+                target_to_transformed_files[future_to_target[future]] = future.result()
+            except Exception as exc:
+                await log_exception_and_notify_chat(update, context, exc)
+                raise
 
     for target in files_to_edit:
-        transformed_target = apply_transformers(target, transformers)
-
-        for f in transformed_target:
+        for f in target_to_transformed_files[target]:
             await post_audio_to_telegram(update, context, f)
             os.remove(f)
 
