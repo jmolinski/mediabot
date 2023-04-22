@@ -114,7 +114,7 @@ def extract_youtube_id(link: str) -> str:
 
 def playlist_url_to_video_urls(playlist_url: str) -> list[str]:
     p1 = run_command(
-        ["yt-dlp", "--skip-download", playlist_url, "-j"], allow_errors=True
+        ["yt-dlp", "--skip-download", "--flat-playlist", playlist_url, "-j"], allow_errors=True
     )
     p2 = run_command(["jq", "-r", ".webpage_url"], stdin=p1.stdout)
 
