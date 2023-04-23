@@ -5,6 +5,7 @@ import itertools
 import os
 import time
 
+from collections import defaultdict
 from pathlib import Path
 
 from telegram import Update
@@ -19,54 +20,65 @@ from telegram_helpers import log_exception_and_notify_chat, post_audio_to_telegr
 from utils import url_to_thumbnail_filename
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
-LENGTH_TRANSFORMERS = ("cut", "cuthead")
+LENGTH_TRANSFORMERS = ("cut", "cuthead", "splitchapters")
 GENERAL_TRANSFORMERS = ("cover", "replacetitle")
 TRANSFORMERS = METADATA_TRANSFORMERS + LENGTH_TRANSFORMERS + GENERAL_TRANSFORMERS
 
 
-def find_transformers(text: str) -> list[list[str]]:
+def find_transformers(text: str) -> dict[str, list[list[str]]]:
     nonempty_lines = [
         line.strip().split(" ") for line in text.split("\n") if line.strip()
     ]
-    transformers = [line for line in nonempty_lines if line[0] in TRANSFORMERS]
+
+    transformers = defaultdict(list)
+    for line in nonempty_lines:
+        transformer_name, *transformer_args = line
+        if transformer_name in TRANSFORMERS:
+            transformers[transformer_name].append(transformer_args)
 
     return transformers
 
 
-def prepare_transformers(transformers: list[list[str]]) -> None:
-    for name, *args in transformers:
-        if name == "cover":
-            picture_url = args[0]
-            thumbnail_filepath = url_to_thumbnail_filename(picture_url)
-            assert thumbnail_filepath.exists(), "Thumbnail file does not exist"
-        else:
-            pass  # other transformers don't need preparation
+def prepare_transformers(transformers: dict[str, list[list[str]]]) -> None:
+    for args in transformers.get("cover", []):
+        picture_url = args[0]
+        thumbnail_filepath = url_to_thumbnail_filename(picture_url)
+        assert thumbnail_filepath.exists(), "Thumbnail file does not exist"
 
 
-def apply_transformer(filepath: Path, name: str, args: list[str]) -> list[Path]:
+def apply_transformer(
+    filepath: Path, name: str, args_lst: list[list[str]]
+) -> list[Path]:
     if name in METADATA_TRANSFORMERS:
-        mp3_utils.change_metadata(filepath, name, " ".join(args))
+        assert len(args_lst) == 1, f"{name} can only be used once"
+        mp3_utils.change_metadata(filepath, name, " ".join(args_lst[0]))
         return [filepath]
     elif name == "cover":
-        picture_url = args[0]
+        assert len(args_lst) == 1, f"cover can only be used once, {args_lst}"
+        picture_url = args_lst[-1][0]
         thumbnail_filepath = url_to_thumbnail_filename(picture_url)
         mp3_utils.set_cover(filepath, thumbnail_filepath)
         return [filepath]
     elif name == "replacetitle":
         # format: replacetitle a;b
-        arg = " ".join(args).strip()
-        if arg.endswith(";"):
-            old_part, new_part = arg.strip(";"), ""
-        else:
-            old_part, new_part = arg.split(";")
-        old_title = mp3_utils.read_metadata(filepath)["title"]
-        new_title = old_title.replace(old_part, new_part).strip()
-        mp3_utils.change_metadata(filepath, "title", new_title)
+        title = mp3_utils.read_metadata(filepath)["title"]
+        for args in args_lst:
+            arg = " ".join(args).strip()
+            if arg.endswith(";"):
+                old_part, new_part = arg.strip(";"), ""
+            else:
+                old_part, new_part = arg.split(";")
+            title = title.replace(old_part, new_part).strip()
+        mp3_utils.change_metadata(filepath, "title", title)
         return [filepath]
     elif name == "cut":
+        assert len(args_lst) == 1, "cut can only be used once"
+        args = args_lst[-1]
         start, end = args
         return [mp3_utils.cut_audio(filepath, start, end)]
     elif name == "cuthead":
+        assert len(args_lst) == 1, "cuthead can only be used once"
+        args = args_lst[0]
         assert len(args) <= 1, "Too many arguments for cuthead (expected 0 or 1)"
         seconds = int(args[0]) if args else 5
         filepaths: list[Path] = [
@@ -75,16 +87,22 @@ def apply_transformer(filepath: Path, name: str, args: list[str]) -> list[Path]:
         ]
         filepath.unlink()
         return filepaths
+    elif name == "splitchapters":
+        # already done elsewhere
+        return [filepath]
     else:
         raise Exception("Unknown transformer name: " + name)
 
 
-def apply_transformers(filepath: Path, transformers: list[list[str]]) -> list[Path]:
+def apply_transformers(
+    filepath: Path, transformers: dict[str, list[list[str]]]
+) -> list[Path]:
     filepaths = [filepath]
-    for name, *args in transformers:
+    for name, transformers_args in transformers.items():
         filepaths = list(
             itertools.chain.from_iterable(
-                apply_transformer(filepath, name, args) for filepath in filepaths
+                apply_transformer(filepath, name, transformers_args)
+                for filepath in filepaths
             )
         )
     return filepaths
@@ -98,15 +116,19 @@ async def react_to_command(
         return
     cleanup_cache()
 
-    files_to_edit = await fetch_targets(update, context, msg)
-
     msg_text = msg.text + "\n" + extra_text
     transformers = find_transformers(msg_text)
     prepare_transformers(transformers)
 
+    files_to_edit = await fetch_targets(
+        update, context, msg, split_chapters="splitchapters" in transformers
+    )
+
     target_to_transformed_files: dict[Path, list[Path]] = {}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    cpu_count = os.cpu_count() or 1
+    max_workers = int(cpu_count * 1.5)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_target = {
             executor.submit(apply_transformers, target, transformers): target
             for target in files_to_edit

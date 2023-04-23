@@ -42,24 +42,36 @@ SOUNDCLOUD_PLAYLIST_PATTERNS = re.compile(
 SOUNDCLOUD_SONG_PATTERNS = re.compile(r"^https://soundcloud\.com/[\w\-]+/[\w\-]+$")
 
 
-def _download_song_from_url_if_not_in_cache(link: str) -> Path:
+def _download_song_from_url_if_not_in_cache(
+    link: str, split_chapters: bool
+) -> list[Path]:
+    # if split_chapters is True, then the song will be downloaded and split
+    # into chapters, even if it's already in the cache
     original_filepath = utils.cache_path_for_mp3_url(link)
-    if not original_filepath.exists():
-        downloaded_song = youtube_utils.ytdl_download_song(link)
-        assert downloaded_song.as_posix() == original_filepath.as_posix()
+    if split_chapters or not original_filepath.exists():
+        downloaded_songs = youtube_utils.ytdl_download_song(link, split_chapters)
+        if split_chapters:
+            return downloaded_songs
+
+        assert downloaded_songs[0].as_posix() == original_filepath.as_posix()
+
     assert original_filepath.exists()
 
-    return original_filepath
+    return [original_filepath]
 
 
 async def download_audio_from_url_if_not_in_cache(
-    update: Update, context: CallbackContext, links: list[str]
+    update: Update, context: CallbackContext, links: list[str], split_chapters: bool
 ) -> list[Path]:
-    link_to_path: dict[str, Path] = {}
+    link_to_path: dict[str, list[Path]] = {}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    cpu_count = os.cpu_count() or 1
+    max_workers = int(cpu_count * 1.5)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_link = {
-            executor.submit(_download_song_from_url_if_not_in_cache, link): link
+            executor.submit(
+                _download_song_from_url_if_not_in_cache, link, split_chapters
+            ): link
             for link in links
         }
         for future in concurrent.futures.as_completed(future_to_link):
@@ -72,9 +84,10 @@ async def download_audio_from_url_if_not_in_cache(
     copied_audio_files = []
 
     for link in links:
-        copy_filepath = generate_random_filename_in_cache(".mp3")
-        shutil.copyfile(link_to_path[link], copy_filepath)
-        copied_audio_files.append(copy_filepath)
+        for chapter_filepath in link_to_path[link]:
+            copy_filepath = generate_random_filename_in_cache(".mp3")
+            shutil.copyfile(chapter_filepath, copy_filepath)
+            copied_audio_files.append(copy_filepath)
 
     return copied_audio_files
 
@@ -125,7 +138,7 @@ async def collect_link_targets(text: str) -> list[str]:
 
 
 async def fetch_targets(
-    update: Update, context: CallbackContext, msg: MsgWrapper
+    update: Update, context: CallbackContext, msg: MsgWrapper, split_chapters: bool
 ) -> list[Path]:
     parent_message_target = await fetch_parent_message_target(context, msg)
     if parent_message_target:
@@ -133,4 +146,6 @@ async def fetch_targets(
 
     links = await collect_link_targets(msg.text)
 
-    return await download_audio_from_url_if_not_in_cache(update, context, links)
+    return await download_audio_from_url_if_not_in_cache(
+        update, context, links, split_chapters
+    )
