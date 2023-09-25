@@ -105,14 +105,17 @@ def read_metadata(filepath: Path) -> dict[str, Any]:
 def cut_audio(
     filepath: Path, start: str | int, end: str | int, overwrite: bool = True
 ) -> Path:
-    if start == "0":
-        start = 0
-    if str(end).startswith("-") or end in ("0", 0):
-        end = math.ceil(read_metadata(filepath)["duration"]) + int(end)
+    start, end = str(start).strip(), str(end).strip()
 
-    start_s = start if isinstance(start, int) else timestamp_to_seconds(start)
-    end_s = end if isinstance(end, int) else timestamp_to_seconds(end)
-    duration_s = end_s - start_s
+    start_sec = timestamp_to_seconds(start) if ":" in start else int(start)
+    end_sec = timestamp_to_seconds(end) if ":" in end else int(end)
+
+    if start_sec < 0:
+        start_sec += math.ceil(read_metadata(filepath)["duration"])
+    if end_sec <= 0:
+        end_sec += math.ceil(read_metadata(filepath)["duration"])
+
+    duration_s = end_sec - start_sec
 
     temp_filename = generate_random_filename_in_cache("mp3")
 
@@ -120,7 +123,7 @@ def cut_audio(
         [
             "ffmpeg",
             "-ss",
-            str(start_s),
+            str(start_sec),
             "-t",
             str(duration_s),
             "-i",
