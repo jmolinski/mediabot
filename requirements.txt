@@ -1,7 +1,8 @@
-black==23.1.0
-mypy==1.1.1
-python-telegram-bot==20.2
-ruff==0.0.259
-yt-dlp==2023.3.4
-Pillow==9.4.0
+black==23.9.1
 eyed3==0.9.7
+isort==5.12.0
+mypy==1.5.1
+Pillow==10.0.1
+python-telegram-bot==20.5
+ruff==0.0.291
+yt-dlp==2023.9.24
