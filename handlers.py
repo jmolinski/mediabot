@@ -8,6 +8,8 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+import telegram.error
+
 from telegram import Update
 from telegram.ext import CallbackContext
 
@@ -16,8 +18,12 @@ import mp3_utils
 from media_fetcher import fetch_targets
 from message import MsgWrapper
 from settings import get_default_logger, get_settings
-from telegram_helpers import log_exception_and_notify_chat, post_audio_to_telegram
-from utils import url_to_thumbnail_filename
+from telegram_helpers import (
+    log_exception_and_notify_chat,
+    post_audio_to_telegram,
+    send_reply,
+)
+from utils import _escape_markdown_v2, url_to_thumbnail_filename
 
 METADATA_TRANSFORMERS = ("title", "artist", "album")
 LENGTH_TRANSFORMERS = ("cut", "cuthead", "splitchapters")
@@ -176,6 +182,49 @@ async def log_error_and_send_info_to_parent(
 
     assert isinstance(context.error, Exception)
     await log_exception_and_notify_chat(update, context, context.error)
+
+
+class HelpCommandHandler:
+    description = "Show this help message."
+    usage = "/help"
+    name = "help"
+
+    @staticmethod
+    async def handler(update: Update, context: CallbackContext) -> None:
+        transformers_descriptions = [
+            "`title` <new title>",
+            "`artist` <new artist>",
+            "`album` <new album>",
+            "`cover` <url>",
+            "`replacetitle` <old part>;<new part>",
+            "`cut` <start> <end> | `cut` 0 <end> | `cut` <start> 0\n"
+            r"_[timestamps either in seconds \(can be negative\) or in h:m:s format]_",
+            "`cuthead` <seconds>",
+            "`splitchapters`",
+        ]
+        supported_transformers = "\n".join(
+            f"{i}. {feature}"
+            for i, feature in enumerate(transformers_descriptions, start=1)
+        )
+
+        unescaped_help_text = f"""
+*Supported services:* youtube, youtube music, soundcloud, bandcamp\n
+*Supported transformers:*\n{supported_transformers}\n
+Multiple transformers can be pipelined by putting them on separate lines.\n
+Multiple source media urls can be processed at once by putting them on separate lines.
+Playlist urls are supported, each playlist item will be processed independently.\n
+Reply to an audio file to transform it.
+Reply with a picture to set it as the cover.\n
+        """
+
+        help_text = _escape_markdown_v2(unescaped_help_text)
+
+        await send_reply(
+            update,
+            context,
+            help_text,
+            parse_mode=telegram.constants.ParseMode.MARKDOWN_V2,
+        )
 
 
 def cleanup_cache() -> None:

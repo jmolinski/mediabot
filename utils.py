@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import random
+import re
 import string
 import subprocess
 import sys
@@ -122,3 +123,7 @@ def url_to_thumbnail_filename(picture_url: str) -> Path:
     os.rename(thumbnail, picture_filename)
     assert expected_filename == picture_filename
     return picture_filename
+
+
+def _escape_markdown_v2(txt: str) -> str:
+    return re.sub("(?=[~>#+-=|{}.!])", "\\\\", txt)
