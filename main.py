@@ -44,6 +44,10 @@ def main() -> None:
     disable_logger("httpx._client")
     disable_logger("PIL.Image")
     disable_logger("eyed3")
+    # TODO silence the hhtpcore?/hhtp11
+    # TODO silence any other spammy loggers
+
+    # TODO add `podcastify` mode
 
     application.run_polling()
 
