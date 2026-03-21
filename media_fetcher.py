@@ -95,14 +95,15 @@ async def download_audio_from_url_if_not_in_cache(
 async def fetch_parent_message_target(
     context: CallbackContext, msg: MsgWrapper
 ) -> list[Path]:
-    if msg.has_parent and msg.parent_msg.has_audio:
-        audio = msg.parent_msg.audio
-        await download_audio_file_from_telegram_if_not_in_cache(context.bot, audio)
-        original_filepath = get_settings().cache_dir / f"{audio.file_unique_id}.mp3"
-        copy_filepath = generate_random_filename_in_cache(".mp3")
-        shutil.copyfile(original_filepath, copy_filepath)
-        return [copy_filepath]
-    return []
+    if not (msg.has_parent and msg.parent_msg.has_audio):
+        return []
+
+    audio = msg.parent_msg.audio
+    await download_audio_file_from_telegram_if_not_in_cache(context.bot, audio)
+    original_filepath = get_settings().cache_dir / f"{audio.file_unique_id}.mp3"
+    copy_filepath = generate_random_filename_in_cache(".mp3")
+    shutil.copyfile(original_filepath, copy_filepath)
+    return [copy_filepath]
 
 
 async def extract_video_links(
