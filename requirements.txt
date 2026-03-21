@@ -5,4 +5,4 @@ mypy==1.5.1
 Pillow==12.1.1
 python-telegram-bot==20.5
 ruff==0.0.291
-yt-dlp==2024.10.22
+yt-dlp==2026.2.21
