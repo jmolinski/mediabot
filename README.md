@@ -3,11 +3,13 @@ telegram bot for fetching yt audio and editing telegram audio files
 
 ## Setup
 
-Install dependencies with `uv sync --python 3.11`.
+Install dependencies with `uv sync --python 3.13`.
 
-Run the bot with `./run.sh` or `uv run --frozen --python 3.11 python main.py`.
+This project uses `uv` for dependency management and execution. `yt-dlp` is installed with its `default` extra so the `yt-dlp-ejs` companion package is included for YouTube extraction. You also need a JavaScript runtime such as Deno or Node on `PATH` for that extractor support.
 
-Run linters with `./linters.sh` or `uv run --frozen --python 3.11 --group dev isort .`, `black .`, `ruff .`, and `mypy .`.
+Run the bot with `./run.sh`, which wraps `uv run --frozen --python 3.13 python main.py`.
+
+Run linters with `./linters.sh`, which wraps `uv run --frozen --python 3.13 --group dev isort .`, `black .`, `ruff .`, and `mypy .`.
 
 Requires a config.json file in the root directory with the following format:
 
