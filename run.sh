@@ -1,6 +1,4 @@
-#! bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-source venv/bin/activate
-
-python main.py
-
+uv run --frozen --python 3.11 python main.py

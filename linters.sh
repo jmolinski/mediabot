@@ -1,9 +1,7 @@
-#! /bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-source venv/bin/activate
-
-isort .
-black .
-ruff .
-mypy .
-
+uv run --frozen --python 3.11 --group dev isort .
+uv run --frozen --python 3.11 --group dev black .
+uv run --frozen --python 3.11 --group dev ruff .
+uv run --frozen --python 3.11 --group dev mypy .

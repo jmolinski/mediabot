@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from PIL import Image
+from PIL.Image import Image as PILImage
 
 DESIRED_THUMBNAIL_FORMAT = "jpg"
 THUMBNAIL_WIDTH = 300
@@ -15,7 +16,7 @@ def convert_image_to_format(image_filepath: Path, desired_format: str) -> Path:
     return desired_filepath
 
 
-def crop_center(pil_img: Image, crop_width: int, crop_height: int) -> Image:
+def crop_center(pil_img: PILImage, crop_width: int, crop_height: int) -> PILImage:
     img_width, img_height = pil_img.size
     return pil_img.crop(
         (
@@ -27,14 +28,14 @@ def crop_center(pil_img: Image, crop_width: int, crop_height: int) -> Image:
     )
 
 
-def crop_max_square(pil_img: Image) -> Image:
+def crop_max_square(pil_img: PILImage) -> PILImage:
     return crop_center(pil_img, min(pil_img.size), min(pil_img.size))
 
 
 def crop_image_to_square(path_to_image: Path) -> None:
     im = Image.open(path_to_image).convert("RGB")
     im_thumb = crop_max_square(im).resize(
-        (THUMBNAIL_WIDTH, THUMBNAIL_WIDTH), Image.LANCZOS
+        (THUMBNAIL_WIDTH, THUMBNAIL_WIDTH), Image.Resampling.LANCZOS
     )
     im_thumb.save(path_to_image, quality=95)
 
