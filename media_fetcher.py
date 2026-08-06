@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import concurrent.futures
-import os
+import functools
 import re
-import shutil
 
 from pathlib import Path
 
@@ -14,12 +12,11 @@ import utils
 import youtube_utils
 
 from message import MsgWrapper
-from settings import get_settings
 from telegram_helpers import (
     download_audio_file_from_telegram_if_not_in_cache,
-    log_exception_and_notify_chat,
+    map_in_thread_pool_or_notify_chat,
 )
-from utils import generate_random_filename_in_cache
+from utils import copy_to_random_filename_in_cache
 
 BANDCAMP_PLAYLIST_PATTERN = re.compile(
     r"^https://[\w\-]+\.bandcamp\.com/album/[\w\-]+$"
@@ -63,33 +60,20 @@ def _download_song_from_url_if_not_in_cache(
 async def download_audio_from_url_if_not_in_cache(
     update: Update, context: CallbackContext, links: list[str], split_chapters: bool
 ) -> list[Path]:
-    link_to_path: dict[str, list[Path]] = {}
+    link_to_path = await map_in_thread_pool_or_notify_chat(
+        update,
+        context,
+        functools.partial(
+            _download_song_from_url_if_not_in_cache, split_chapters=split_chapters
+        ),
+        links,
+    )
 
-    cpu_count = os.cpu_count() or 1
-    max_workers = int(cpu_count * 1.5)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_link = {
-            executor.submit(
-                _download_song_from_url_if_not_in_cache, link, split_chapters
-            ): link
-            for link in links
-        }
-        for future in concurrent.futures.as_completed(future_to_link):
-            try:
-                link_to_path[future_to_link[future]] = future.result()
-            except Exception as exc:
-                await log_exception_and_notify_chat(update, context, exc)
-                raise
-
-    copied_audio_files = []
-
-    for link in links:
-        for chapter_filepath in link_to_path[link]:
-            copy_filepath = generate_random_filename_in_cache(".mp3")
-            shutil.copyfile(chapter_filepath, copy_filepath)
-            copied_audio_files.append(copy_filepath)
-
-    return copied_audio_files
+    return [
+        copy_to_random_filename_in_cache(chapter_filepath, ".mp3")
+        for link in links
+        for chapter_filepath in link_to_path[link]
+    ]
 
 
 async def fetch_parent_message_target(
@@ -99,11 +83,10 @@ async def fetch_parent_message_target(
         return []
 
     audio = msg.parent_msg.audio
-    await download_audio_file_from_telegram_if_not_in_cache(context.bot, audio)
-    original_filepath = get_settings().cache_dir / f"{audio.file_unique_id}.mp3"
-    copy_filepath = generate_random_filename_in_cache(".mp3")
-    shutil.copyfile(original_filepath, copy_filepath)
-    return [copy_filepath]
+    original_filepath = await download_audio_file_from_telegram_if_not_in_cache(
+        context.bot, audio
+    )
+    return [copy_to_random_filename_in_cache(original_filepath, ".mp3")]
 
 
 async def extract_video_links(

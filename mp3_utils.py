@@ -10,20 +10,24 @@ import eyed3
 from utils import generate_random_filename_in_cache, run_command, timestamp_to_seconds
 
 
-def change_metadata(file: Path, field_name: str, data: str) -> None:
+def run_ffmpeg_to_temp_mp3(args: list[str]) -> Path:
     temp_filename = generate_random_filename_in_cache("mp3")
 
-    run_command(
+    run_command(["ffmpeg", *args, temp_filename.as_posix()])
+
+    return temp_filename
+
+
+def change_metadata(file: Path, field_name: str, data: str) -> None:
+    temp_filename = run_ffmpeg_to_temp_mp3(
         [
-            "ffmpeg",
             "-i",
             file.as_posix(),
             "-metadata",
             rf"{field_name}={data}",
             "-codec",
             "copy",
-            temp_filename.as_posix(),
-        ],
+        ]
     )
 
     temp_filename.rename(file)
@@ -32,11 +36,8 @@ def change_metadata(file: Path, field_name: str, data: str) -> None:
 def set_cover(filepath: Path, cover_filepath: Path) -> None:
     # source: https://stackoverflow.com/a/18718265
 
-    temp_filename = generate_random_filename_in_cache("mp3")
-
-    run_command(
+    temp_filename = run_ffmpeg_to_temp_mp3(
         [
-            "ffmpeg",
             "-i",
             filepath.as_posix(),
             "-i",
@@ -53,8 +54,7 @@ def set_cover(filepath: Path, cover_filepath: Path) -> None:
             "title=Album cover",
             "-metadata:s:v",
             "comment=Cover (front)",
-            temp_filename.as_posix(),
-        ],
+        ]
     )
 
     temp_filename.rename(filepath)
@@ -117,11 +117,8 @@ def cut_audio(
 
     duration_s = end_sec - start_sec
 
-    temp_filename = generate_random_filename_in_cache("mp3")
-
-    run_command(
+    temp_filename = run_ffmpeg_to_temp_mp3(
         [
-            "ffmpeg",
             "-ss",
             str(start_sec),
             "-t",
@@ -130,8 +127,7 @@ def cut_audio(
             filepath.as_posix(),
             "-acodec",
             "copy",
-            temp_filename.as_posix(),
-        ],
+        ]
     )
 
     copy_cover_image(filepath, temp_filename)

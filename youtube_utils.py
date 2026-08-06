@@ -4,6 +4,7 @@ import json
 import os
 
 from pathlib import Path
+from typing import Any, cast
 
 import mp3_utils
 
@@ -16,16 +17,20 @@ from settings import get_default_logger
 from utils import cache_path_for_mp3_url, run_command
 
 
+def find_sibling_files(mp3_path: Path) -> list[Path]:
+    return list(mp3_path.parent.glob(f"{mp3_path.stem}.*"))
+
+
+def read_info_json_file(info_json_path: Path) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads(info_json_path.read_text()))
+
+
 def find_info_json_file_path(mp3_path: Path) -> Path:
-    return [
-        p
-        for p in mp3_path.parent.glob(f"{mp3_path.stem}.*")
-        if p.name.endswith(".info.json")
-    ][0]
+    return [p for p in find_sibling_files(mp3_path) if p.name.endswith(".info.json")][0]
 
 
 def get_chapter_names_from_info_json_file(info_json_path: Path) -> list[str]:
-    found_metadata = json.loads(info_json_path.read_text())
+    found_metadata = read_info_json_file(info_json_path)
     chapters = found_metadata["chapters"]
     chapters.sort(key=lambda c: c["start_time"])
     return [c["title"] for c in chapters]
@@ -34,7 +39,7 @@ def get_chapter_names_from_info_json_file(info_json_path: Path) -> list[str]:
 def set_metadata_from_info_file(
     mp3_path: Path, info_json_path: Path, title: str | None = None
 ) -> None:
-    found_metadata = json.loads(info_json_path.read_text())
+    found_metadata = read_info_json_file(info_json_path)
 
     if title is None:
         title = found_metadata["title"]
@@ -47,7 +52,7 @@ def set_metadata_from_info_file(
 def get_thumbnail_path_for_mp3(mp3_path: Path) -> Path | None:
     thumbnails = [
         p
-        for p in mp3_path.parent.glob(f"{mp3_path.stem}.*")
+        for p in find_sibling_files(mp3_path)
         if not p.name.endswith(".info.json") and not p.name.endswith(".mp3")
     ]
 

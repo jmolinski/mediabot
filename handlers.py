@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import concurrent.futures
+import functools
 import itertools
 import os
 import time
@@ -20,6 +20,7 @@ from message import MsgWrapper
 from settings import get_default_logger, get_settings
 from telegram_helpers import (
     log_exception_and_notify_chat,
+    map_in_thread_pool_or_notify_chat,
     post_audio_to_telegram,
     send_reply,
 )
@@ -130,21 +131,12 @@ async def react_to_command(
         update, context, msg, split_chapters="splitchapters" in transformers
     )
 
-    target_to_transformed_files: dict[Path, list[Path]] = {}
-
-    cpu_count = os.cpu_count() or 1
-    max_workers = int(cpu_count * 1.5)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_target = {
-            executor.submit(apply_transformers, target, transformers): target
-            for target in files_to_edit
-        }
-        for future in concurrent.futures.as_completed(future_to_target):
-            try:
-                target_to_transformed_files[future_to_target[future]] = future.result()
-            except Exception as exc:
-                await log_exception_and_notify_chat(update, context, exc)
-                raise
+    target_to_transformed_files = await map_in_thread_pool_or_notify_chat(
+        update,
+        context,
+        functools.partial(apply_transformers, transformers=transformers),
+        files_to_edit,
+    )
 
     for target in files_to_edit:
         for f in target_to_transformed_files[target]:
