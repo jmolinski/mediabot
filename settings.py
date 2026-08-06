@@ -9,6 +9,7 @@ class Settings:
     log_file: Path
     authorized_users: list[int]
     authorized_chats: list[int]
+    authorize_all: bool
     cache_dir: Path
     cache_timeout_seconds: int
 
@@ -23,10 +24,15 @@ class Settings:
 
         self.authorized_users = filecontents["allowed_users"]
         self.authorized_chats = filecontents["allowed_groups"]
-        if not self.authorized_users and not self.authorized_chats:
+        self.authorize_all = bool(filecontents.get("allow_all_users", False))
+        if (
+            not self.authorize_all
+            and not self.authorized_users
+            and not self.authorized_chats
+        ):
             raise ValueError(
-                "No allowed_users or allowed_groups configured: the bot would "
-                "accept commands from anyone. Add at least one entry."
+                "No allowed_users or allowed_groups configured: add at least one "
+                'entry, or set "allow_all_users": true to accept commands from anyone.'
             )
 
         self.cache_timeout_seconds = int(filecontents["cache_timeout_minutes"]) * 60

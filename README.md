@@ -28,9 +28,9 @@ Requires a config.json file in the root directory with the following format:
 }
 ```
 
-At least one of `allowed_users` / `allowed_groups` must be non-empty; the bot refuses
-to start otherwise, so it is never open to arbitrary users. Keep `config.json` out of
-version control — it holds the bot token.
+At least one of `allowed_users` / `allowed_groups` must be non-empty, otherwise the bot
+refuses to start. To intentionally run an open bot, set `"allow_all_users": true`.
+Keep `config.json` out of version control — it holds the bot token.
 
 2. TODOs
 
