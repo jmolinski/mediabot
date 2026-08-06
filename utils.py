@@ -9,7 +9,6 @@ import shutil
 import socket
 import string
 import subprocess
-import sys
 import urllib.parse
 import urllib.request
 
@@ -79,10 +78,20 @@ def run_command(
     ret = subprocess.run(cmd, shell=as_shell, capture_output=True, input=stdin)
 
     if not allow_errors and ret.returncode != expected_code:
-        print(ret.stdout)
-        print(ret.stderr, file=sys.stderr)
+        stdout = ret.stdout.decode("utf-8", errors="replace") if ret.stdout else ""
+        stderr = ret.stderr.decode("utf-8", errors="replace") if ret.stderr else ""
 
-        raise RuntimeError(f"Command {cmd} failed with code {ret.returncode}")
+        get_default_logger().error(
+            "Command %s failed with code %s\nstdout:\n%s\nstderr:\n%s",
+            cmd,
+            ret.returncode,
+            stdout,
+            stderr,
+        )
+
+        raise RuntimeError(
+            f"Command {cmd} failed with code {ret.returncode}: {stderr.strip()}"
+        )
 
     return ret
 

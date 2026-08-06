@@ -153,7 +153,10 @@ async def log_exception_and_notify_chat(
         summary = html.escape(redact_secrets(f"{type(exc).__name__}: {exc}")[:500])
         await send_reply(update, context, f"Request failed: {summary}")
     except Exception as e:
-        get_default_logger().error("Error while sending error message: ", exc_info=e)
+        get_default_logger().error(
+            "Failed to send error notification to chat", exc_info=e
+        )
+        get_default_logger().error("Original error being reported:", exc_info=exc)
 
 
 async def map_in_thread_pool_or_notify_chat(
