@@ -191,6 +191,9 @@ class HelpCommandHandler:
 
     @staticmethod
     async def handler(update: Update, context: CallbackContext) -> None:
+        if not MsgWrapper(update.message).is_authorized():
+            return
+
         transformers_descriptions = [
             "`title` <new title>",
             "`artist` <new artist>",

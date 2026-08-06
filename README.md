@@ -28,6 +28,10 @@ Requires a config.json file in the root directory with the following format:
 }
 ```
 
+At least one of `allowed_users` / `allowed_groups` must be non-empty; the bot refuses
+to start otherwise, so it is never open to arbitrary users. Keep `config.json` out of
+version control — it holds the bot token.
+
 2. TODOs
 
 - mass set tags -> 'apply to all next'?

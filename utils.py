@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import os
 import random
 import re
+import socket
 import string
 import subprocess
 import sys
@@ -17,6 +19,9 @@ from image_utils import convert_raw_picture_to_thumbnail_format_and_shape
 from settings import get_default_logger, get_settings
 
 T = TypeVar("T")
+
+DOWNLOAD_TIMEOUT_SECONDS = 30
+MAX_DOWNLOAD_SIZE_BYTES = 20_000_000
 
 
 def split_into_chunks(lst: list[T], n: int) -> list[list[T]]:
@@ -106,10 +111,46 @@ def remove_query_parameter_from_url(url: str, parameter: str) -> str:
     return urllib.parse.urlunparse(u)
 
 
+def validate_public_https_url(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError("Only https urls can be downloaded")
+    if not parsed.hostname:
+        raise ValueError("Url has no hostname")
+
+    try:
+        addrinfo = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
+    except socket.gaierror as e:
+        raise ValueError(f"Could not resolve host {parsed.hostname}") from e
+
+    for *_, sockaddr in addrinfo:
+        address = ipaddress.ip_address(sockaddr[0])
+        if not address.is_global or address.is_multicast:
+            raise ValueError(f"Refusing to download from non-public address {address}")
+
+
 def download_url_to_cache(url: str) -> Path:
-    assert url.startswith("https")
+    validate_public_https_url(url)
+
     output_filepath = cache_path_for_url(url)
-    urllib.request.urlretrieve(url, output_filepath)
+
+    with (
+        urllib.request.urlopen(  # noqa: S310 - scheme and host validated above
+            url, timeout=DOWNLOAD_TIMEOUT_SECONDS
+        ) as response,
+        output_filepath.open("wb") as f,
+    ):
+        downloaded = 0
+        while chunk := response.read(64 * 1024):
+            downloaded += len(chunk)
+            if downloaded > MAX_DOWNLOAD_SIZE_BYTES:
+                f.close()
+                output_filepath.unlink(missing_ok=True)
+                raise ValueError(
+                    f"Download exceeds size limit of {MAX_DOWNLOAD_SIZE_BYTES} bytes"
+                )
+            f.write(chunk)
+
     return output_filepath
 
 
