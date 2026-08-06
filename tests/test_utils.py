@@ -171,21 +171,111 @@ class TestEscapeMarkdownV2:
         assert utils._escape_markdown_v2("!#") == "\\!\\#"
 
 
-class TestDownloadUrlToCache:
-    def test_rejects_non_https(self, fake_settings: FakeSettings) -> None:
-        with pytest.raises(AssertionError):
-            utils.download_url_to_cache("http://insecure.com/a")
+class TestNormalizeExtension:
+    def test_adds_leading_dot(self) -> None:
+        assert utils.normalize_extension("mp3") == ".mp3"
 
+    def test_keeps_existing_dot(self) -> None:
+        assert utils.normalize_extension(".jpg") == ".jpg"
+
+    def test_empty_stays_empty(self) -> None:
+        assert utils.normalize_extension("") == ""
+
+
+class TestCopyToRandomFilenameInCache:
+    def test_copies_content_to_new_cache_file(
+        self, fake_settings: FakeSettings, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "src.mp3"
+        src.write_text("payload")
+
+        dest = utils.copy_to_random_filename_in_cache(src, "mp3")
+
+        assert dest.parent == fake_settings.cache_dir
+        assert dest.suffix == ".mp3"
+        assert dest.read_text() == "payload"
+
+
+class TestValidatePublicHttpsUrl:
+    def test_rejects_non_https(self) -> None:
+        with pytest.raises(ValueError, match="Only https"):
+            utils.validate_public_https_url("http://insecure.com/a")
+
+    def test_rejects_missing_hostname(self) -> None:
+        with pytest.raises(ValueError, match="no hostname"):
+            utils.validate_public_https_url("https:///path")
+
+    def test_rejects_unresolvable_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import socket
+
+        def boom(host: str, port: int) -> object:
+            raise socket.gaierror("nope")
+
+        monkeypatch.setattr(utils.socket, "getaddrinfo", boom)
+        with pytest.raises(ValueError, match="Could not resolve host"):
+            utils.validate_public_https_url("https://doesnotexist.example/a")
+
+    def test_rejects_private_address(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            utils.socket,
+            "getaddrinfo",
+            lambda host, port: [(2, 1, 6, "", ("127.0.0.1", port))],
+        )
+        with pytest.raises(ValueError, match="non-public address"):
+            utils.validate_public_https_url("https://localhost.example/a")
+
+    def test_accepts_public_address(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            utils.socket,
+            "getaddrinfo",
+            lambda host, port: [(2, 1, 6, "", ("93.184.216.34", port))],
+        )
+        # Should not raise for a public IP.
+        utils.validate_public_https_url("https://example.com/a")
+
+
+class _FakeResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = list(chunks)
+
+    def read(self, _size: int) -> bytes:
+        return self._chunks.pop(0) if self._chunks else b""
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+class TestDownloadUrlToCache:
     def test_downloads_to_expected_path(
         self, fake_settings: FakeSettings, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         url = "https://example.com/pic.jpg"
-
-        def fake_urlretrieve(src: str, dest: str) -> None:
-            Path(dest).write_text("data")
-
-        monkeypatch.setattr(utils.urllib.request, "urlretrieve", fake_urlretrieve)
+        monkeypatch.setattr(utils, "validate_public_https_url", lambda u: None)
+        monkeypatch.setattr(
+            utils.urllib.request,
+            "urlopen",
+            lambda u, timeout=None: _FakeResponse([b"da", b"ta"]),
+        )
 
         path = utils.download_url_to_cache(url)
         assert path == utils.cache_path_for_url(url)
-        assert path.read_text() == "data"
+        assert path.read_bytes() == b"data"
+
+    def test_rejects_oversized_download(
+        self, fake_settings: FakeSettings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        url = "https://example.com/big.bin"
+        monkeypatch.setattr(utils, "validate_public_https_url", lambda u: None)
+        monkeypatch.setattr(utils, "MAX_DOWNLOAD_SIZE_BYTES", 3)
+        monkeypatch.setattr(
+            utils.urllib.request,
+            "urlopen",
+            lambda u, timeout=None: _FakeResponse([b"toolong"]),
+        )
+
+        with pytest.raises(ValueError, match="size limit"):
+            utils.download_url_to_cache(url)
+        assert not utils.cache_path_for_url(url).exists()

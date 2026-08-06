@@ -84,9 +84,7 @@ class _FakeImages:
         self._front = _FakeImage(front) if front is not None else None
         self._others = [_FakeImage(o) for o in others]
 
-    def get(self, key: str) -> _FakeImage:
-        if self._front is None:
-            raise AttributeError
+    def get(self, key: str) -> _FakeImage | None:
         return self._front
 
     def __iter__(self) -> Any:

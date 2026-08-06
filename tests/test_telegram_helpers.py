@@ -205,32 +205,55 @@ class TestSendReplyAudio:
         assert kwargs["thumbnail"] == b"cover"
 
 
+class TestRedactSecrets:
+    def test_replaces_token(self, fake_settings: Any) -> None:
+        fake_settings.token = "supersecret"
+        assert telegram_helpers.redact_secrets("a supersecret b") == "a [REDACTED] b"
+
+    def test_noop_when_no_token(self, fake_settings: Any) -> None:
+        fake_settings.token = ""
+        assert telegram_helpers.redact_secrets("nothing to redact") == (
+            "nothing to redact"
+        )
+
+
 class TestLogExceptionAndNotifyChat:
-    async def test_sends_formatted_traceback(
-        self, monkeypatch: pytest.MonkeyPatch
+    async def test_sends_summary_and_redacts_secret(
+        self, fake_settings: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        import logging
+
+        fake_settings.token = "supersecret"
+        monkeypatch.setattr(
+            telegram_helpers, "get_default_logger", lambda: logging.getLogger("t")
+        )
+
         sent: dict[str, Any] = {}
 
         async def fake_send_reply(
             update: Any, context: Any, text: str, **kwargs: Any
         ) -> None:
             sent["text"] = text
-            sent["kwargs"] = kwargs
 
         monkeypatch.setattr(telegram_helpers, "send_reply", fake_send_reply)
 
         await telegram_helpers.log_exception_and_notify_chat(
-            object(), object(), ValueError("boom")  # type: ignore[arg-type]
+            object(),  # type: ignore[arg-type]
+            object(),  # type: ignore[arg-type]
+            ValueError("boom supersecret"),
         )
 
+        assert sent["text"].startswith("Request failed:")
         assert "boom" in sent["text"]
-        assert sent["kwargs"]["parse_mode"] == "MarkdownV2"
+        assert "supersecret" not in sent["text"]  # token redacted
 
-    async def test_swallows_send_errors(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_swallows_send_errors(
+        self, fake_settings: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import logging
+
         async def failing_send_reply(*a: Any, **k: Any) -> None:
             raise RuntimeError("network down")
-
-        import logging
 
         monkeypatch.setattr(telegram_helpers, "send_reply", failing_send_reply)
         monkeypatch.setattr(
@@ -239,7 +262,9 @@ class TestLogExceptionAndNotifyChat:
 
         # Should not raise despite the inner failure.
         await telegram_helpers.log_exception_and_notify_chat(
-            object(), object(), ValueError("boom")  # type: ignore[arg-type]
+            object(),  # type: ignore[arg-type]
+            object(),  # type: ignore[arg-type]
+            ValueError("boom"),
         )
 
 

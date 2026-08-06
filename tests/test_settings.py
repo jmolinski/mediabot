@@ -53,10 +53,23 @@ class TestSettings:
 
         assert settings.log_file.exists()
 
-    def test_authorize_all_true_when_no_users_or_groups(self, tmp_path: Path) -> None:
+    def test_no_users_or_groups_without_flag_raises(self, tmp_path: Path) -> None:
         cache_dir = tmp_path / "cache"
         config_path = _write_config(
             tmp_path / "x", cache_dir, allowed_users=[], allowed_groups=[]
+        )
+
+        with pytest.raises(ValueError, match="No allowed_users or allowed_groups"):
+            settings_module.Settings(str(config_path))
+
+    def test_allow_all_users_flag_enables_authorize_all(self, tmp_path: Path) -> None:
+        cache_dir = tmp_path / "cache"
+        config_path = _write_config(
+            tmp_path / "x",
+            cache_dir,
+            allowed_users=[],
+            allowed_groups=[],
+            allow_all_users=True,
         )
 
         settings = settings_module.Settings(str(config_path))
