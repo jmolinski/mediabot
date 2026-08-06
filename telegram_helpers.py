@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import os
 import traceback
 
@@ -132,12 +133,20 @@ async def send_reply_audio(
     )
 
 
+def redact_secrets(text: str) -> str:
+    token = get_settings().token
+    return text.replace(token, "[REDACTED]") if token else text
+
+
 async def log_exception_and_notify_chat(
     update: Update, context: CallbackContext, exc: Exception
 ) -> None:
+    get_default_logger().error(
+        "".join(redact_secrets(line) for line in traceback.format_exception(exc))
+    )
     try:
-        str_exp = "".join(traceback.format_exception(exc))
-        await send_reply(update, context, f"```{str_exp}```", parse_mode="MarkdownV2")
+        summary = html.escape(redact_secrets(f"{type(exc).__name__}: {exc}")[:500])
+        await send_reply(update, context, f"Request failed: {summary}")
     except Exception as e:
         get_default_logger().error("Error while sending error message: ", exc_info=e)
 

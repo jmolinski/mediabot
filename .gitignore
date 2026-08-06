@@ -129,4 +129,8 @@ dmypy.json
 .pyre/
 
 conf.json
+config.json
+log.log
+media/*
+!media/.gitkeep
 .idea/

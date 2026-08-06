@@ -24,9 +24,16 @@ class Settings:
 
         self.authorized_users = filecontents["allowed_users"]
         self.authorized_chats = filecontents["allowed_groups"]
-        self.authorize_all = (
-            len(self.authorized_users) == len(self.authorized_chats) == 0
-        )
+        self.authorize_all = bool(filecontents.get("allow_all_users", False))
+        if (
+            not self.authorize_all
+            and not self.authorized_users
+            and not self.authorized_chats
+        ):
+            raise ValueError(
+                "No allowed_users or allowed_groups configured: add at least one "
+                'entry, or set "allow_all_users": true to accept commands from anyone.'
+            )
 
         self.cache_timeout_seconds = int(filecontents["cache_timeout_minutes"]) * 60
         self.cache_dir = Path(filecontents["cache_dir"])
