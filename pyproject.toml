@@ -15,5 +15,26 @@ dev = [
     "black",
     "isort",
     "mypy",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=5.0.0",
     "ruff",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = [
+    "handlers",
+    "image_utils",
+    "main",
+    "media_fetcher",
+    "message",
+    "mp3_utils",
+    "settings",
+    "telegram_helpers",
+    "utils",
+    "youtube_utils",
 ]
