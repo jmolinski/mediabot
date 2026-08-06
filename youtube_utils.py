@@ -165,6 +165,18 @@ def playlist_url_to_video_urls(playlist_url: str) -> list[str]:
         ["yt-dlp", "--skip-download", "--flat-playlist", playlist_url, "-j"],
         allow_errors=True,
     )
+    if p1.returncode != 0:
+        get_default_logger().error(
+            "yt-dlp failed to list playlist %s (code %s): %s",
+            playlist_url,
+            p1.returncode,
+            p1.stderr.decode("utf-8", errors="replace"),
+        )
+    if not p1.stdout.strip():
+        raise RuntimeError(
+            f"Failed to extract any videos from playlist url: {playlist_url}"
+        )
+
     p2 = run_command(["jq", "-r", ".webpage_url"], stdin=p1.stdout)
 
     # Validate URLs

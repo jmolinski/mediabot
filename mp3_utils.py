@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import eyed3
 
+from settings import get_default_logger
 from utils import generate_random_filename_in_cache, run_command, timestamp_to_seconds
 
 
@@ -62,17 +63,18 @@ def set_cover(filepath: Path, cover_filepath: Path) -> None:
 
 def read_cover_image(filepath: Path) -> bytes | None:
     audio_file = eyed3.load(filepath.as_posix())
+    if audio_file is None or audio_file.tag is None:
+        get_default_logger().warning(f"Could not read id3 tags from {filepath}")
+        return None
 
-    try:
-        return cast(bytes, audio_file.tag.images.get("Cover (front)").image_data)
-    except Exception:
-        pass  # not an issue
+    front_cover = audio_file.tag.images.get("Cover (front)")
+    if front_cover is not None:
+        return cast(bytes, front_cover.image_data)
 
     images = list(audio_file.tag.images)
     if images:
         return cast(bytes, images[0].image_data)
-    else:
-        return None
+    return None
 
 
 def copy_cover_image(src: Path, dest: Path) -> None:
