@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import concurrent.futures
 import html
 import os
 import traceback
 
+from collections.abc import Callable, Hashable, Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from telegram import Audio, Bot, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
@@ -16,6 +18,9 @@ from message import MsgWrapper
 from settings import get_default_logger, get_settings
 
 EMPTY_MSG = "\xad\xad"
+
+ItemT = TypeVar("ItemT", bound=Hashable)
+ResultT = TypeVar("ResultT")
 
 
 TELEGRAM_BOT_MAX_FILE_SIZE = 50_000_000  # 50 MB
@@ -149,6 +154,28 @@ async def log_exception_and_notify_chat(
         await send_reply(update, context, f"Request failed: {summary}")
     except Exception as e:
         get_default_logger().error("Error while sending error message: ", exc_info=e)
+
+
+async def map_in_thread_pool_or_notify_chat(
+    update: Update,
+    context: CallbackContext,
+    fn: Callable[[ItemT], ResultT],
+    items: Iterable[ItemT],
+) -> dict[ItemT, ResultT]:
+    results: dict[ItemT, ResultT] = {}
+
+    cpu_count = os.cpu_count() or 1
+    max_workers = int(cpu_count * 1.5)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_item = {executor.submit(fn, item): item for item in items}
+        for future in concurrent.futures.as_completed(future_to_item):
+            try:
+                results[future_to_item[future]] = future.result()
+            except Exception as exc:
+                await log_exception_and_notify_chat(update, context, exc)
+                raise
+
+    return results
 
 
 async def download_audio_file_from_telegram_if_not_in_cache(

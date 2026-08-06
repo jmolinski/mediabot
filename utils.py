@@ -5,6 +5,7 @@ import ipaddress
 import os
 import random
 import re
+import shutil
 import socket
 import string
 import subprocess
@@ -34,9 +35,14 @@ def get_name_from_author_obj(data: dict[Any, Any]) -> str:
     return cast(str, username or first_name)
 
 
-def generate_random_filename_in_cache(ext: str = "", length: int = 20) -> Path:
+def normalize_extension(ext: str) -> str:
     if ext and not ext.startswith("."):
-        ext = "." + ext
+        return "." + ext
+    return ext
+
+
+def generate_random_filename_in_cache(ext: str = "", length: int = 20) -> Path:
+    ext = normalize_extension(ext)
 
     tmp_ = "tmp_"
     length -= len(tmp_)
@@ -53,6 +59,12 @@ def generate_random_filename_in_cache(ext: str = "", length: int = 20) -> Path:
         filename = settings.get_settings().cache_dir / (fname + ext)
         if not filename.exists():
             return filename
+
+
+def copy_to_random_filename_in_cache(source: Path, ext: str = "") -> Path:
+    copy_filepath = generate_random_filename_in_cache(ext)
+    shutil.copyfile(source, copy_filepath)
+    return copy_filepath
 
 
 def run_command(
@@ -97,8 +109,7 @@ def cache_path_for_mp3_url(url: str) -> Path:
 
 def cache_path_for_url(url: str, ext: str = "") -> Path:
     url_sig = url_signature(url)
-    ext = ext if ext == "" or ext.startswith(".") else "." + ext
-    return get_settings().cache_dir / f"{url_sig}{ext}"
+    return get_settings().cache_dir / f"{url_sig}{normalize_extension(ext)}"
 
 
 def remove_query_parameter_from_url(url: str, parameter: str) -> str:

@@ -7,10 +7,14 @@ DESIRED_THUMBNAIL_FORMAT = "jpg"
 THUMBNAIL_WIDTH = 300
 
 
+def open_as_rgb(image_filepath: Path) -> PILImage:
+    return Image.open(image_filepath).convert("RGB")
+
+
 def convert_image_to_format(image_filepath: Path, desired_format: str) -> Path:
     desired_filepath = image_filepath.with_suffix(f".{desired_format}")
 
-    im = Image.open(image_filepath).convert("RGB")
+    im = open_as_rgb(image_filepath)
     im.save(desired_filepath)
 
     return desired_filepath
@@ -33,7 +37,7 @@ def crop_max_square(pil_img: PILImage) -> PILImage:
 
 
 def crop_image_to_square(path_to_image: Path) -> None:
-    im = Image.open(path_to_image).convert("RGB")
+    im = open_as_rgb(path_to_image)
     im_thumb = crop_max_square(im).resize(
         (THUMBNAIL_WIDTH, THUMBNAIL_WIDTH), Image.Resampling.LANCZOS
     )
