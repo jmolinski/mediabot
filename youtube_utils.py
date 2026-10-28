@@ -99,6 +99,8 @@ def ytdl_download_song(url: str, split_chapters: bool) -> list[Path]:
     run_command(
         [
             "yt-dlp",
+            "--js-runtimes",
+            "node",
             "-f",
             "bestaudio/best",
             "--extract-audio",
