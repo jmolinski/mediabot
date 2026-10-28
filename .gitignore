@@ -134,3 +134,4 @@ log.log
 media/*
 !media/.gitkeep
 .idea/
+.DS_Store

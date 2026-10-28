@@ -90,6 +90,8 @@ def copy_cover_image(src: Path, dest: Path) -> None:
 
 def read_metadata(filepath: Path) -> dict[str, Any]:
     audio_file = eyed3.load(filepath.as_posix())
+    if audio_file is None or audio_file.tag is None:
+        raise ValueError(f"Could not read metadata from {filepath}")
 
     metadata = {
         "duration": audio_file.info.time_secs,

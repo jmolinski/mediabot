@@ -13,7 +13,7 @@ from image_utils import (
     convert_image_to_format,
     crop_image_to_square,
 )
-from settings import get_default_logger
+from settings import get_default_logger, get_settings
 from utils import cache_path_for_mp3_url, run_command
 
 
@@ -34,6 +34,22 @@ def get_chapter_names_from_info_json_file(info_json_path: Path) -> list[str]:
     chapters = found_metadata["chapters"]
     chapters.sort(key=lambda c: c["start_time"])
     return [c["title"] for c in chapters]
+
+
+def _yt_dlp_auth_args() -> list[str]:
+    settings = get_settings()
+
+    if settings.youtube_cookie_file is not None:
+        if not settings.youtube_cookie_file.is_file():
+            raise FileNotFoundError(
+                f"YouTube cookie file does not exist: {settings.youtube_cookie_file}"
+            )
+        return ["--cookies", settings.youtube_cookie_file.as_posix()]
+
+    if settings.youtube_cookies_from_browser:
+        return ["--cookies-from-browser", settings.youtube_cookies_from_browser]
+
+    return []
 
 
 def set_metadata_from_info_file(
@@ -114,6 +130,7 @@ def ytdl_download_song(url: str, split_chapters: bool) -> list[Path]:
             "--output",
             output_filepath_str,
             *(split_chapters_args if split_chapters else []),
+            *_yt_dlp_auth_args(),
             url,
         ],
     )
@@ -164,7 +181,14 @@ def extract_youtube_id(link: str) -> str:
 
 def playlist_url_to_video_urls(playlist_url: str) -> list[str]:
     p1 = run_command(
-        ["yt-dlp", "--skip-download", "--flat-playlist", playlist_url, "-j"],
+        [
+            "yt-dlp",
+            *_yt_dlp_auth_args(),
+            "--skip-download",
+            "--flat-playlist",
+            playlist_url,
+            "-j",
+        ],
         allow_errors=True,
     )
     if p1.returncode != 0:
