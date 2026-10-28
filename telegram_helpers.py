@@ -55,7 +55,7 @@ async def send_message(
     if text is None:
         text = EMPTY_MSG
 
-    base_args = {
+    base_args: dict[str, Any] = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
