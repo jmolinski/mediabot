@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 from pathlib import Path
 
@@ -12,6 +13,8 @@ class Settings:
     authorize_all: bool
     cache_dir: Path
     cache_timeout_seconds: int
+    youtube_cookie_file: Path | None
+    youtube_cookies_from_browser: str | None
 
     def __init__(self, filename: str) -> None:
         with open(filename) as f:
@@ -39,6 +42,16 @@ class Settings:
         self.cache_dir = Path(filecontents["cache_dir"])
         if not self.cache_dir.is_dir():
             self.cache_dir.mkdir(parents=True)
+
+        youtube_cookie_file = filecontents.get("youtube_cookie_file") or os.getenv(
+            "YOUTUBE_COOKIE_FILE"
+        )
+        self.youtube_cookie_file = (
+            Path(youtube_cookie_file).expanduser() if youtube_cookie_file else None
+        )
+        self.youtube_cookies_from_browser = filecontents.get(
+            "youtube_cookies_from_browser"
+        ) or os.getenv("YOUTUBE_COOKIES_FROM_BROWSER")
 
 
 def get_settings() -> Settings:
